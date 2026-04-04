@@ -21,8 +21,11 @@ This skill wraps the core `defuddle` logic with an advanced AI post-processing l
 ### 2. YouTube Links (Enhanced Mode)
 When the URL is from `youtube.com` or `youtu.be`:
 1. **Raw Extraction**: Use `defuddle` to get the title, description, and transcript.
-2. **Intelligent Summary**: Analyze the transcript and generate a **detailed summary in Traditional Chinese**.
-3. **Key Insights**: List 3-5 bullet points of the most valuable takeaways.
+2. **Intelligent Deep Analysis**: Analyze the transcript to provide a structured, multi-layered report:
+   - **核心主旨 (Core Mission)**: One sentence summarizing the video's primary goal.
+   - **內容深度分析 (Deep Breakdown)**: Detailed explanation of the video's structure, key arguments, and specific techniques or examples mentioned.
+   - **實作建議 (Actionable Advice)**: List concrete steps or applications for the viewer based on the content.
+3. **Key Takeaways**: Provide 5-8 bullet points of high-value, specific insights.
 4. **Hashtags**: Generate 3-5 relevant `#hashtags` based on the content.
 5. **Obsidian Date Tag**: Append the current date in the format `#yyyy-mm-dd`.
 6. **Output Format**:
