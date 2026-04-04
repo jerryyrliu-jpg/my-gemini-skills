@@ -1,19 +1,18 @@
 # My Gemini Skills (AI-Agent-Enhanced)
 
-This repository contains custom skills for Gemini CLI and Claude Code, optimized for **Obsidian** and **YouTube Content Analysis**.
+This repository contains custom and curated skills for Gemini CLI and Claude Code, organized for **Obsidian-centric** workflows.
 
-## Included Skills:
+## 📂 Skill Categories:
 
-### Web & YouTube Analysis
-- **my-defuddle**: Enhanced YouTube extraction with Traditional Chinese analysis, key insights, and automated tagging (#yyyy-mm-dd).
-
-### Visual Layouts
-- **obsidian-canvas-creator**: Advanced canvas layouts for Obsidian, featuring intelligent sizing and categorical color coding (from [axtonliu/axton-obsidian-visual-skills](https://github.com/axtonliu/axton-obsidian-visual-skills)).
-
-### Learning System (from [RoundTable02/tutor-skills](https://github.com/RoundTable02/tutor-skills))
-These skills are located within the `tutor-skills/` directory:
-- **tutor-setup**: Analyzes codebases, documentation, or PDFs to generate a structured Obsidian StudyVault.
-- **tutor**: An interactive Socratic tutor that quizzes you on the generated StudyVault.
+### 🛰️ Obsidian Skills (from [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills))
+The following skills are managed within the `obsidian-skills/` directory:
+- **my-defuddle**: (Modified) Enhanced YouTube analysis and Traditional Chinese summaries.
+- **obsidian-canvas-creator**: (Modified from [axtonliu](https://github.com/axtonliu/axton-obsidian-visual-skills)) Advanced visual layouts.
+- **obsidian-markdown**: Enhanced Markdown for Obsidian (Wikilinks, callouts).
+- **obsidian-cli**: Command-line control for Obsidian vaults.
+- **obsidian-bases**: Database-like views for notes.
+- **beautiful-mermaid**: Aesthetic Mermaid charts for visualization.
+- **tutor-skills**: (from [RoundTable02/tutor-skills](https://github.com/RoundTable02/tutor-skills)) Socratic learning system.
 
 ---
 *Created for OpenClaw Agents framework.*
