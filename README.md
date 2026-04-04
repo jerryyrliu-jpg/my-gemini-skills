@@ -13,8 +13,6 @@ Managed within the `obsidian-skills/` directory:
 - **obsidian-bases**: Database-like views for notes.
 - **tutor-skills**: (from [RoundTable02/tutor-skills](https://github.com/RoundTable02/tutor-skills)) Socratic learning system.
 
-### 🌐 Web & Search Skills 
-- **web**: Unified web browsing - fast content extraction + interactive browsing with safety guards. 
 
 ### 🎨 Visualization Skills
 - **beautiful-mermaid**: (from [lukilabs/beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid)) Aesthetic Mermaid charts for high-quality visualization.
