@@ -5,26 +5,23 @@ description: Analyze any source material (codebase, documentation, or PDFs) and 
 
 # Tutor Setup: StudyVault Generator
 
-Transforms raw knowledge sources into a structured, navigable Obsidian StudyVault designed for active learning.
+Transforms raw knowledge sources into a structured, navigable Obsidian StudyVault.
 
 ## Triggers
 - `/tutor-setup <source-path>`
 - "Analyze this codebase and set up a study vault."
-- "Create a concept map from these documents."
 
-## Core Strategy
-1. **Analyze Structure**: Identify the tech stack, key modules, and data flow.
-2. **Concept Extraction**: Identify core concepts, terminologies, and their relationships.
-3. **Vault Generation**:
-    - **Index**: A central `Home.md` linking to all maps.
-    - **Concept Map**: Visualizing relationships using Wikilinks and Mermaid diagrams.
-    - **Architecture Overview**: Explaining the "How" and "Why" of the system.
-    - **Onboarding Exercises**: Generating targeted tasks (e.g., "Add a feature", "Fix a bug") to test understanding.
+## Phased Workflow
+1. **D1: Source Discovery**: Scan files, identify file types.
+2. **D2: Stack Detection (Codebase Mode)**: Refer to `references/codebase-logic.md`. Identify languages, frameworks, and entry points.
+3. **D3: Content Extraction**: Parse text and code to identify core concepts.
+4. **D4: Dependency Mapping**: Map how concepts/modules relate.
+5. **D5: Dashboard Creation**: Generate `Dashboard.md` using `references/dashboard-template.md`.
+6. **D6: Concept Note Generation**: Create notes using `references/concept-note-format.md`.
+7. **D7: Active Recall Integration**: Add folded answers to questions.
+8. **D8: Wiki-linking**: Link all notes.
+9. **D9: Quality Checklist**: Verify all links and structure.
 
-## Implementation Rules
-- Use Obsidian-flavored Markdown (callouts, wikilinks).
-- Always include a `StudyPlan.md` with a logical learning progression.
-- For codebases, prioritize mapping the entry point and the core logic loop.
-
-## Integration
-- Works best when combined with `obsidian-canvas-creator` to generate visual concept maps.
+## Requirements
+- Use Obsidian callouts (`> [!info]`) and Mermaid diagrams.
+- Always include a `StudyPlan.md`.
