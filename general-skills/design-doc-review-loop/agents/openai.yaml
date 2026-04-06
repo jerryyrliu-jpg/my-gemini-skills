@@ -1,0 +1,7 @@
+interface:
+  display_name: "Design Review Loop"
+  short_description: "Review and iterate specs to approval."
+  default_prompt: "Use $design-doc-review-loop to brainstorm an idea, write the design doc, review it with an agent, and iterate until the spec passes."
+
+policy:
+  allow_implicit_invocation: true
