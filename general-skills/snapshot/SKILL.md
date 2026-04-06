@@ -7,18 +7,20 @@ description: 立即總結本次對話的所有重大進展，產出工業級的 
 
 當使用者輸入 /snapshot 或要求總結對話時，請執行以下程序：
 
-## 1. 數據分析 (Session Analysis)
+## 1. 核心規範 (Hard Mandates)
+- **必須包含 Hashtags**: 在 YAML 與 正文標題下方必須包含關鍵標籤。
+- **必須包含日期標籤**: 格式固定為 #yyyy-mm-dd (例如 #2026-04-06)。
+- **格式對齊**: 嚴格遵守提供的工業級總結模板。
+
+## 2. 數據分析 (Session Analysis)
 掃描當前對話歷史，提取以下維度：
 - Implemented Scope: 已完成的功能範圍（條列式）。
-- Implementation Details: 具體的代碼異動、新增檔案、修改的邏輯、採用的演算法或標準（如 Zlib RFC 1950）。
-- Review Outcome: 過程中發現的 Bug、修正的架構錯誤、安全性建議。
-- Verification: 執行的測試指令、測試結果斷言。
-- Git Outcome: 提交的 Commit SHA、分支變更。
-- Current Status: 系統目前的穩定狀態、接下來的預計動作。
+- Implementation Details: 具體的代碼異動、新增檔案、修改的邏輯。
+- Review Outcome: 過程中發現的 Bug 與修正。
+- Verification: 執行的測試指令與結果。
+- Git Outcome: 提交的 Commit SHA。
 
-## 2. 格式規範 (Template)
-產出的 Markdown 必須嚴格遵守以下結構：
-
+## 3. 格式模板 (Template)
 ```markdown
 ---
 title: [主題名稱] Implementation And Summary
@@ -26,43 +28,36 @@ date: YYYY-MM-DD
 tags:
   - memory-snapshot
   - [專案名稱]
-  - [關鍵字1]
-  - [關鍵字2]
-  - YYYY-MM-DD
+  - #YYYY-MM-DD
 aliases:
   - [主題簡寫] Summary
 ---
 
 # [主題名稱] Implementation And Summary
 
-#memory-snapshot #[專案名稱] #[關鍵字1] #YYYY-MM-DD
+#memory-snapshot #[專案名稱] #[關鍵字] #YYYY-MM-DD
 
 ## Summary
-[一小段概括本次 Session 的核心目標與最終成果]
+[概括目標與成果]
 
 ## Implemented Scope
-- [功能 1]
-- [功能 2]
+- [功能清單]
 
 ## Implementation Details
-[詳述技術細節、檔案路徑與採用的架構設計]
+[技術細節與路徑]
 
 ## Review Outcome
-[記錄審查發現的問題與最終修復方案]
+[審查發現與修復]
 
 ## Verification
-- **Baseline**: [測試前狀態]
-- **Result**: [測試後結果，如 155 passed]
+- **Result**: [測試結果]
 
 ## Git Outcome
 - **Commit**: [SHA]
-- **Message**: [訊息]
 
 ## Current Status
-[目前系統所處的狀態與後續建議]
+[系統狀態]
 ```
 
-## 3. 實體操作 (Action)
-1.  自動生成標題：根據對話內容推導一個簡潔的標題。
-2.  存檔路徑：寫入至 /Users/yj/我的雲端硬碟/OpenClaw Agents/01_Obsidian/09_memory-snapshot/YYYY-MM-DD_[主題名稱]_Summary.md。
-3.  確認回報：完成後告知使用者檔案已存檔，並提供完整路徑。
+## 4. 實體操作 (Action)
+1. 存檔路徑：/Users/yj/我的雲端硬碟/OpenClaw Agents/01_Obsidian/09_memory-snapshot/YYYY-MM-DD_[主題名稱]_Summary.md。

@@ -1,27 +1,15 @@
-# Snapshot (Session 記憶快照)
+# Snapshot Skill
 
-這是一個工業級的 Session 狀態快照技能，用於立即總結對話進展並持久化存檔。
+工業級 Session 總結技能，專為 Gemini CLI 與 Obsidian 打造。
 
-## 🌟 核心功能
+## 🌟 核心特性
+- **自動化總結**: 提取實作範圍、技術細節與測試結果。
+- **Hashtag 支援**: 產出的檔案自動包含 `#memory-snapshot` 與自定義標籤。
+- **日期標記**: 強制包含 `#yyyy-mm-dd` 格式，對齊 Obsidian 檢索規範。
+- **雲端同步**: 自動存入指定的 Google Drive 快照目錄。
 
-- **數據深度提取**：自動分析當前對話，提取「已完成範圍」、「技術細節」、「審核結果」、「測試驗證」與「Git 提交」等維度。
-- **標準化模板**：產出具備 YAML Frontmatter 的 Obsidian 格式 Markdown。
-- **雲端同步**：自動存檔至 `/Users/yj/我的雲端硬碟/OpenClaw Agents/01_Obsidian/09_memory-snapshot/`。
+## 🛠️ 安裝方式
+將 `SKILL.md` 放置於 `~/.gemini/skills/snapshot/` 即可。
 
-## 🚀 使用方式
-
-當一個重大開發步驟完成、或需要結束當前對話時，請輸入：
-
-```bash
-/snapshot
-```
-
-或是要求：
-> 「幫我做個 snapshot」
-
-## 📂 檔案結構
-
-- `SKILL.md`: 快照定義與存檔邏輯。
-
----
-#memory-snapshot #session-management #obsidian #openclaw
+## 📋 使用規範
+執行 `/snapshot` 後，Agent 將嚴格依照工業級模板產出具備雙層標籤架構的 Markdown 文件。
