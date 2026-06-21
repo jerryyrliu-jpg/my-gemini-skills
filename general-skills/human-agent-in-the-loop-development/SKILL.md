@@ -117,7 +117,7 @@ The reviewer MUST end the response with one of:
 
 ### Iteration Cap & Escalation
 
-`hail-loop.sh` enforces a cap of **3 review iterations** per loop (configurable via `MAX_REVIEW_ITERATIONS`). When the cap is reached:
+`hail-loop.sh` enforces a cap of **10 review iterations** per loop (configurable via `MAX_REVIEW_ITERATIONS`). When the cap is reached:
 - `advance` to Phase 4 or 7 will print a `⚠️ ITERATION CAP REACHED` warning
 - `revert` for the canonical paths (4→2, 7→6) is **blocked** and prints a `🚨 ESCALATE` message
 - The agent must stop looping and present all outstanding issues to the human for a final decision

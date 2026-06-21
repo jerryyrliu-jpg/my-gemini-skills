@@ -7,7 +7,7 @@ set -euo pipefail
 
 STATE_FILE=".gemini/hail-state.json"
 LOCK_DIR=".gemini/.hail.lock"
-MAX_REVIEW_ITERATIONS=3
+MAX_REVIEW_ITERATIONS=10
 
 show_help() {
   cat << 'EOF'
