@@ -1,19 +1,20 @@
 ---
 name: beautiful-mermaid
-description: "Generate highly aesthetic Mermaid diagrams (Block Diagram, Sequence, Flowchart) optimized for Obsidian rendering."
+description: "Generate highly aesthetic Mermaid diagrams (Block, Sequence, Flowchart, C4 Context/Container/Component) optimized for Obsidian and high-end documentation."
 ---
 
 # Skill: Beautiful Mermaid
 **Author:** Gemini CLI (Integrated)
-**Version:** 1.2.0
-**Description:** Generate highly aesthetic Mermaid diagrams (Block Diagram, Sequence, Flowchart) optimized for Obsidian rendering.
+**Version:** 1.3.0
+**Description:** Generate highly aesthetic Mermaid diagrams optimized for Obsidian rendering and professional documentation.
 
 ## 🎨 Core Design Aesthetics
-When generating Mermaid diagrams, follow these optimization rules to deliver a premium, professional-grade visual experience comparable to tools like Figma or Excalidraw:
+When generating Mermaid diagrams, follow these optimization rules to deliver a premium, professional-grade visual experience comparable to Figma or Excalidraw:
 
 1. **Global Initialization Directive (Mermaid Init Directive)**:
    - Always include the `%%{init: { ... }}%%` block at the very top of your diagram to configure global fonts, lines, and base colors.
    - Recommended Fonts: `Inter`, `Outfit`, `PingFang TC`, `Segoe UI`, `system-ui`.
+   - To prevent flash of unstyled content and maintain theme adaptability (supporting both Dark and Light modes), prefer desaturated base themes or leave the `background` parameter adaptable (omit `background` for transparent rendering).
 
 2. **Curated Color Palettes**:
    - **Tokyo Night (Default / Recommended)**: Deep, cybernetic blue/purple tone.
@@ -39,76 +40,88 @@ When generating Mermaid diagrams, follow these optimization rules to deliver a p
 
 ---
 
-## 🛠️ Style Templates & Examples
+## 🚀 Advanced Layouts & Styling (mermaid-expert)
 
-### 1. Flowchart / Block Diagram
-```mermaid
+### 1. Custom themeVariables
+Use custom `themeVariables` in the init block to override specific element details (e.g., actor boxes, loop boundaries, edge labels) to prevent default high-contrast jarring colors:
+```text
 %%{init: {
   "theme": "base",
   "themeVariables": {
     "fontFamily": "Inter, system-ui, sans-serif",
-    "background": "#1a1b26",
     "primaryColor": "#24283b",
     "primaryTextColor": "#c0caf5",
     "lineColor": "#565f89",
-    "edgeLabelBackground": "#1a1b26",
-    "tertiaryColor": "#1f2335"
+    "edgeLabelBackground": "#1a1b26"
   }
 }}%%
-graph TD
-  %% Style Definitions (ClassDef)
-  classDef user fill:#7aa2f7,stroke:#3d59a1,stroke-width:2px,color:#ffffff;
-  classDef db fill:#9ece6a,stroke:#73daca,stroke-width:2px,color:#1a1b26;
-  classDef process fill:#24283b,stroke:#565f89,stroke-width:1px,color:#c0caf5;
-  classDef warning fill:#f7768e,stroke:#db4b4b,stroke-width:2px,color:#ffffff;
-
-  subgraph System_Boundary [System Boundary]
-    UI([User Interface]):::user --> API[Backend API Service]:::process
-    API --> Cache[(Redis Cache)]:::db
-    API --> DB[(SQL Database)]:::db
-    API -.-> Log{Log writing failed?}:::process
-    Log -- Yes --> Alert[Send Alert Notification]:::warning
-  end
 ```
 
-### 2. Sequence Diagram
+### 2. Styling Nodes with Class Definitions
+- Define reusable node classes via `classDef` at the top or bottom of the diagram.
+- Use explicit class syntax `NodeID:::ClassName` to apply styles.
+- **Tip**: To achieve styling equivalent to multiple class definitions, define composite classes (e.g., `classDef activeWarning fill:#f7768e,stroke:#db4b4b,stroke-width:2px,stroke-dasharray:5;`).
+
+### 3. Text Wrapping & Link Formatting
+- **Text Wrapping**: Mermaid does not auto-wrap text inside shapes by default. Use quotes and HTML break tags `<br/>` to format multi-line labels: `NodeID["**Title**<br/>Description line 1<br/>Description line 2"]`.
+- **Link Formatting**: Avoid raw characters that interfere with Mermaid parser syntax. For links, use standard markdown format inside nodes, or use Mermaid's built-in click/callback functionality if interactive.
+- **Label Escape**: Wrap label text in double quotes if it contains parentheses, brackets, or braces (e.g., `Node["System (Internal)"]`).
+
+---
+
+## 🏢 C4 Architecture & Component Diagrams
+Design C4 Model Diagrams (System Context, Container, Component) natively in Mermaid using clean custom style variables and C4 structural conventions.
+
+### C4 Diagram Design Rules:
+1. **Color Conventions**:
+   - **Person / User**: Dark Blue (`#08427b`)
+   - **Internal System / Container / Component**: Medium Blue (`#1168bd`)
+   - **External System / Person**: Grey (`#999999`)
+   - **Database**: Blue Cylindrical Node with DB label formatting.
+2. **Clear Boundaries**:
+   - Use `subgraph` for System Boundaries, Enterprise Boundaries, and Container Boundaries.
+   - Style boundaries with dashed borders (`stroke-dasharray: 5 5`) and transparent backgrounds to distinguish them clearly from system components.
+3. **Relationships**:
+   - Always label relationship links clearly with the action and technology protocol.
+   - Format: `Source -->|Action Description (Protocol)| Target` or `Source -- "Action Description (Protocol)" --> Target`.
+
+### Native C4 Context & Container Template:
 ```mermaid
 %%{init: {
   "theme": "base",
   "themeVariables": {
     "fontFamily": "Inter, system-ui, sans-serif",
-    "background": "#1a1b26",
-    "actorBorder": "#565f89",
-    "actorBkg": "#24283b",
-    "actorTextColor": "#c0caf5",
-    "actorLineColor": "#565f89",
-    "signalColor": "#7aa2f7",
-    "signalTextColor": "#c0caf5",
-    "labelBoxBkgColor": "#24283b",
-    "labelBoxBorderColor": "#565f89",
-    "labelTextColor": "#c0caf5",
-    "loopLimitBkgColor": "#1f2335",
-    "loopLimitBorderColor": "#565f89"
+    "background": "#f8f9fa",
+    "lineColor": "#707070",
+    "edgeLabelBackground": "#ffffff"
   }
 }}%%
-sequenceDiagram
-  autonumber
-  actor User as User
-  participant Client as Client App
-  participant API as API Gateway
-  participant DB as Database
+graph TB
+  %% Class Definitions
+  classDef c4Person fill:#08427b,stroke:#073b6e,stroke-width:1px,color:#ffffff;
+  classDef c4Internal fill:#1168bd,stroke:#0f5ca6,stroke-width:1px,color:#ffffff;
+  classDef c4External fill:#999999,stroke:#888888,stroke-width:1px,color:#ffffff;
+  classDef c4Boundary fill:none,stroke:#cccccc,stroke-width:2px,stroke-dasharray:5 5,color:#333333;
 
-  User->>Client: Input credentials and login
-  activate Client
-  Client->>API: POST /api/v1/login (encrypted credentials)
-  activate API
-  API->>DB: Query user record
-  DB-->>API: Return user & hashed password
-  Note over API,DB: Compare password hashes
-  API-->>Client: Login successful (Return JWT Token)
-  deactivate API
-  Client-->>User: Redirect to dashboard
-  deactivate Client
+  %% Person Node
+  User(["User<br/>'[Person]'"]):::c4Person
+
+  %% System Boundary
+  subgraph System_Boundary ["System Boundary: E-Commerce Platform"]
+    Web_App["Web Application<br/>'[Container: React]'<br/><br/>Allows users to browse catalog and purchase items."]:::c4Internal
+    API_Gateway["API Gateway<br/>'[Container: NestJS]'<br/><br/>Routes traffic and handles authentication."]:::c4Internal
+    DB[("Database<br/>'[Container: PostgreSQL]'<br/><br/>Stores catalog, order data, and user accounts.")]:::c4Internal
+  end
+  style System_Boundary fill:none,stroke:#999999,stroke-width:2px,stroke-dasharray:5 5;
+
+  %% External System
+  Payment_Gateway["Payment Gateway<br/>'[System: Stripe]'<br/><br/>Processes credit card transactions."]:::c4External
+
+  %% Relationships
+  User -->|Browses catalog & orders (HTTPS)| Web_App
+  Web_App -->|API Requests (HTTPS/JSON)| API_Gateway
+  API_Gateway -->|Queries & updates (SQL)| DB
+  API_Gateway -->|Sends transactions (HTTPS/REST)| Payment_Gateway
 ```
 
 ---
