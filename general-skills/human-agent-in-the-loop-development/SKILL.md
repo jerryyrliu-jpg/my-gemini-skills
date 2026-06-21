@@ -1,6 +1,6 @@
 ---
 name: human-agent-in-the-loop-development
-description: Use when starting a task or planning a feature to establish collaborative design, design doc reviews, and execution plan reviews with the human and review subagents.
+description: Use when starting a NEW FEATURE, large task, or complex bug fix that requires design decisions, architecture alignment, or a multi-step execution plan. Do NOT use for one-line fixes, config tweaks, or any change with no structural impact.
 ---
 
 # Human-Agent-in-the-Loop Development Workflow
@@ -93,64 +93,118 @@ graph TD
 | **(8)** | **Human Final Review** | Human | Human performs final approval of the plan, providing the green light to begin coding. |
 | **(9)** | **Enter Implementation & Verification** | Agent + Subagent | Write code and tests following `test-driven-development` and `verification-before-completion` specifications. |
 
+### Human Checkpoint Note
+
+Phases 3, 5, and 8 are **human advisory checkpoints**. The `hail-loop.sh` script cannot enforce that a human has actually reviewed — it can only track phase state. The agent is expected to pause and present the artifact to the human before calling `advance` past these phases. The loop-back path after a Phase 4 review failure (`revert 2`) implies re-entering Phase 3 for human confirmation before returning to Phase 4 — this is the agent's responsibility to honor, not the script's.
+
 ## Subagent Review Loop Protocol
 
 This is the decision protocol the agent MUST follow after each subagent review phase. It is the mechanism that makes the review loop self-correcting.
 
+### Severity Rubric
+
+All subagent reviews MUST classify each finding using this rubric:
+
+| Severity | Definition | Example |
+| :--- | :--- | :--- |
+| **High** | Blocks the feature from working correctly, creates wrong architecture, or misses a critical requirement. Revert and fix immediately. | "The design uses a stateless API but requires session-level consistency — this will silently corrupt data under concurrency." |
+| **Medium** | Significant gap, risk, or ambiguity that should be addressed before coding starts. Revert and fix unless the iteration cap is reached. | "The error handling strategy for third-party API timeouts is undefined — downstream code will have nowhere to propagate this." |
+| **Low** | Minor improvement, nice-to-have, or edge case with low probability. Log and accept; do NOT revert. | "The naming convention for internal events is inconsistent across sections." |
+
+The reviewer MUST end the response with one of:
+- `"VERDICT: No Medium/High issues found."` — agent calls `advance`
+- `"VERDICT: Medium/High issues found (listed above)."` — agent evaluates iteration cap, then calls `revert` or escalates
+
+### Iteration Cap & Escalation
+
+`hail-loop.sh` enforces a cap of **3 review iterations** per loop (configurable via `MAX_REVIEW_ITERATIONS`). When the cap is reached:
+- `advance` to Phase 4 or 7 will print a `⚠️ ITERATION CAP REACHED` warning
+- `revert` for the canonical paths (4→2, 7→6) is **blocked** and prints a `🚨 ESCALATE` message
+- The agent must stop looping and present all outstanding issues to the human for a final decision
+- The human may accept the risks, request one more targeted fix (using `revert --force`), or choose to descope
+
 ### Phase 4 — Subagent Review Doc
 
-1. Dispatch a `code-reviewer` subagent with the design doc as input. Prompt the subagent to perform an adversarial review, identifying logical gaps, missing edge cases, and architectural risks. Ask it to classify each finding as **Low / Medium / High** risk.
-2. Evaluate the findings:
-   - **No findings, or Low risk only** → call `advance` and proceed to Phase 5.
-   - **Any Medium or High risk finding** → call `revert 2`, revise the design doc to address the issues, and re-enter Phase 3 (human review) before returning to Phase 4.
+1. Dispatch a `code-reviewer` subagent with the design doc as input. Use this prompt template:
+
+   > "Perform an adversarial review of the attached design document. Identify logical gaps, missing edge cases, undefined error handling, and architectural risks. Classify each finding as High / Medium / Low using the severity rubric in the HAIL skill. End with: VERDICT: No Medium/High issues found. OR VERDICT: Medium/High issues found (listed above)."
+
+2. Read the VERDICT line and evaluate:
+   - **"No Medium/High issues found"** → call `advance`, proceed to Phase 5
+   - **"Medium/High issues found"** AND iteration count < cap → call `revert 2`, fix the design doc, re-enter Phase 3 (human review), then return to Phase 4
+   - **"Medium/High issues found"** AND cap reached (`🚨 ESCALATE` message) → present all outstanding issues to the human for a final decision; do NOT call `revert` without human approval
 
 ```bash
-# Review passed — no Medium/High issues
-bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh advance
+# Review passed
+bash "$HAIL_SCRIPT" advance
 
-# Review failed — issues found, revert to Write Design Doc
-bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh revert 2
+# Review failed, iteration count below cap
+bash "$HAIL_SCRIPT" revert 2
+
+# Cap reached — only with explicit human approval
+bash "$HAIL_SCRIPT" revert --force 2
 ```
 
 ### Phase 7 — Subagent Review Plan
 
-1. Dispatch a `code-reviewer` subagent with the execution plan as input. Prompt it to verify that the plan covers all design doc requirements, that checkpoints are concrete and verifiable, and that the implementation order is logically sound. Classify each finding as **Low / Medium / High** risk.
-2. Evaluate the findings:
-   - **No findings, or Low risk only** → call `advance` and proceed to Phase 8.
-   - **Any Medium or High risk finding** → call `revert 6`, revise the plan, and re-enter Phase 7.
+1. Dispatch a `code-reviewer` subagent with the execution plan as input. Use this prompt template:
+
+   > "Perform an adversarial review of the attached execution plan. Verify it covers all requirements from the design doc, that each checkpoint is concrete and independently verifiable, and that the implementation order is logically sound. Classify each finding as High / Medium / Low using the severity rubric in the HAIL skill. End with: VERDICT: No Medium/High issues found. OR VERDICT: Medium/High issues found (listed above)."
+
+2. Read the VERDICT line and evaluate:
+   - **"No Medium/High issues found"** → call `advance`, proceed to Phase 8
+   - **"Medium/High issues found"** AND iteration count < cap → call `revert 6`, fix the plan, re-enter Phase 7
+   - **"Medium/High issues found"** AND cap reached → escalate to human; do NOT revert without approval
 
 ```bash
-# Review passed — no Medium/High issues
-bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh advance
+# Review passed
+bash "$HAIL_SCRIPT" advance
 
-# Review failed — issues found, revert to Write Plan
-bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh revert 6
+# Review failed, iteration count below cap
+bash "$HAIL_SCRIPT" revert 6
+
+# Cap reached — only with explicit human approval
+bash "$HAIL_SCRIPT" revert --force 6
 ```
 
 ## HAIL Loop Script Control
 
 This skill provides a dedicated workflow state management and loop control script. The agent can invoke this script to initialize state, check progress, advance phases, or revert to an earlier phase when a review fails.
 
+### Setup
+
+Locate the script once at the start of a session and store it in a variable:
+
+```bash
+HAIL_SCRIPT=$(find . -name hail-loop.sh -path "*/human-agent-in-the-loop-development/*" | head -1)
+```
+
+Use `$HAIL_SCRIPT` in all commands below.
+
 ### Usage
 
 1. **Initialize HAIL Loop**:
    ```bash
-   bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh init [DESIGN_DOC_PATH] [PLAN_PATH]
+   bash "$HAIL_SCRIPT" init [DESIGN_DOC_PATH] [PLAN_PATH]
+   # If a loop is already active, use --force to overwrite:
+   bash "$HAIL_SCRIPT" init --force [DESIGN_DOC_PATH] [PLAN_PATH]
    ```
 
 2. **Check Current Status & Next Steps**:
    ```bash
-   bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh status
+   bash "$HAIL_SCRIPT" status
    ```
 
 3. **Advance to the Next Phase** (after a step completes or a review passes):
    ```bash
-   bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh advance
+   bash "$HAIL_SCRIPT" advance
    ```
 
 4. **Revert to a Previous Phase** (after a review finds Medium/High issues):
    ```bash
-   bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh revert <PHASE_NUMBER>
+   bash "$HAIL_SCRIPT" revert <PHASE_NUMBER>
+   # Blocked at the iteration cap — use --force only with human approval:
+   bash "$HAIL_SCRIPT" revert --force <PHASE_NUMBER>
    ```
    Common revert targets:
    - `revert 2` — design doc review (Phase 4) found issues → rewrite design doc
@@ -158,8 +212,10 @@ This skill provides a dedicated workflow state management and loop control scrip
 
 5. **Reset or Cancel the Loop**:
    ```bash
-   bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh cancel
+   bash "$HAIL_SCRIPT" cancel
    ```
 
 ### State Tracking
-Workflow state information is stored in JSON format at `.gemini/hail-state.json`, making it easily readable and verifiable by both the agent and review subagents.
+Workflow state is stored at `.gemini/hail-state.json`. Fields include `phase`, `doc_review_iterations`, `plan_review_iterations`, and timestamps — readable by both the agent and review subagents.
+
+If the state file is corrupted, run `bash "$HAIL_SCRIPT" init --force` to reset.
