@@ -62,6 +62,8 @@ init_state() {
   "phase_name": "Discuss Phase",
   "design_doc_path": "$doc_path",
   "plan_path": "$plan_path",
+  "doc_review_iterations": 0,
+  "plan_review_iterations": 0,
   "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "last_updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
@@ -88,12 +90,16 @@ show_status() {
     return 1
   fi
   
-  local active phase name doc plan
+  local active phase name doc plan doc_iter plan_iter
   active=$(read_json_field "active")
   phase=$(read_json_field "phase")
   name=$(read_json_field "phase_name")
   doc=$(read_json_field "design_doc_path")
   plan=$(read_json_field "plan_path")
+  doc_iter=$(read_json_field "doc_review_iterations")
+  plan_iter=$(read_json_field "plan_review_iterations")
+  doc_iter="${doc_iter:-0}"
+  plan_iter="${plan_iter:-0}"
 
   echo "🔄 HAIL Current State:"
   echo "-----------------------------------"
@@ -101,16 +107,18 @@ show_status() {
   echo "  Phase:       $phase ($name)"
   echo "  Design Doc:  $doc"
   echo "  Plan Path:   $plan"
+  [[ $doc_iter -gt 0 ]] && echo "  Doc Review:  iteration $doc_iter"
+  [[ $plan_iter -gt 0 ]] && echo "  Plan Review: iteration $plan_iter"
   echo "-----------------------------------"
-  
+
   case "$phase" in
     1) echo "👉 Next Step: Discuss direction and architecture with the human." ;;
     2) echo "👉 Next Step: Write design doc to '$doc'." ;;
     3) echo "👉 Next Step: Request human review on '$doc'." ;;
-    4) echo "👉 Next Step: Run subagent code review on '$doc'." ;;
+    4) echo "👉 Next Step: Run subagent code review on '$doc'. [Doc Review Iteration $doc_iter]" ;;
     5) echo "👉 Next Step: (Optional) Request final human review on '$doc'." ;;
     6) echo "👉 Next Step: Write execution plan to '$plan'." ;;
-    7) echo "👉 Next Step: Run subagent code review on '$plan'." ;;
+    7) echo "👉 Next Step: Run subagent code review on '$plan'. [Plan Review Iteration $plan_iter]" ;;
     8) echo "👉 Next Step: Request final human review on '$plan'." ;;
     9) echo "🎉 Ready to Implement! Proceed with TDD and coding." ;;
   esac
@@ -135,6 +143,7 @@ write_phase() {
   local current_phase="$1"
   local new_phase="$2"
   local new_name="$3"
+  local increment_key="${4:-}"  # optional: field name to increment by 1
   local timestamp
   timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -146,23 +155,32 @@ with open('$STATE_FILE', 'r') as f:
 d['phase'] = $new_phase
 d['phase_name'] = '$new_name'
 d['last_updated'] = '$timestamp'
+$(if [[ -n "$increment_key" ]]; then echo "d['$increment_key'] = d.get('$increment_key', 0) + 1"; fi)
 with open('$STATE_FILE', 'w') as f:
     json.dump(d, f, indent=2)
 "
   elif command -v jq >/dev/null 2>&1; then
-    local tmp
+    local tmp jq_expr
     tmp=$(mktemp)
-    jq ".phase = $new_phase | .phase_name = \"$new_name\" | .last_updated = \"$timestamp\"" "$STATE_FILE" > "$tmp"
+    jq_expr=".phase = $new_phase | .phase_name = \"$new_name\" | .last_updated = \"$timestamp\""
+    if [[ -n "$increment_key" ]]; then
+      jq_expr="$jq_expr | .$increment_key = (.$increment_key // 0) + 1"
+    fi
+    jq "$jq_expr" "$STATE_FILE" > "$tmp"
     mv "$tmp" "$STATE_FILE"
   else
-    if [[ "$(uname)" == "Darwin" ]]; then
-      sed -i '' "s/\"phase\": $current_phase/\"phase\": $new_phase/" "$STATE_FILE"
-      sed -i '' "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"$new_name\"/" "$STATE_FILE"
-      sed -i '' "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/" "$STATE_FILE"
-    else
-      sed -i "s/\"phase\": $current_phase/\"phase\": $new_phase/" "$STATE_FILE"
-      sed -i "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"$new_name\"/" "$STATE_FILE"
-      sed -i "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/" "$STATE_FILE"
+    local is_mac=false
+    [[ "$(uname)" == "Darwin" ]] && is_mac=true
+    sed_i() { if $is_mac; then sed -i '' "$1" "$STATE_FILE"; else sed -i "$1" "$STATE_FILE"; fi; }
+    sed_i "s/\"phase\": $current_phase/\"phase\": $new_phase/"
+    sed_i "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"$new_name\"/"
+    sed_i "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/"
+    if [[ -n "$increment_key" ]]; then
+      local cur_val
+      cur_val=$(grep -o "\"$increment_key\": *[0-9]*" "$STATE_FILE" | grep -o '[0-9]*' || echo "0")
+      cur_val="${cur_val:-0}"
+      local new_val=$(( cur_val + 1 ))
+      sed_i "s/\"$increment_key\": $cur_val/\"$increment_key\": $new_val/"
     fi
   fi
 }
@@ -188,10 +206,12 @@ advance_phase() {
     return 0
   fi
 
-  local next_name
+  local next_name increment_key=""
   next_name=$(phase_name_for "$next_phase")
+  [[ $next_phase -eq 4 ]] && increment_key="doc_review_iterations"
+  [[ $next_phase -eq 7 ]] && increment_key="plan_review_iterations"
 
-  write_phase "$current_phase" "$next_phase" "$next_name"
+  write_phase "$current_phase" "$next_phase" "$next_name" "$increment_key"
   echo "➡️ Advanced from Phase $current_phase to Phase $next_phase ($next_name)"
   show_status
 }
