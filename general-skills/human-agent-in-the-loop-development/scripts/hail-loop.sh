@@ -10,6 +10,30 @@ STATE_FILE="$PROJECT_ROOT/.gemini/hail-state.json"
 LOCK_DIR="$PROJECT_ROOT/.gemini/.hail.lock"
 MAX_REVIEW_ITERATIONS=10
 
+LOCK_ACQUIRED=false
+
+# --------------------------------------------------------------------------
+# Global Helpers
+# --------------------------------------------------------------------------
+
+release_lock() {
+  if [[ "$LOCK_ACQUIRED" == "true" ]]; then
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    LOCK_ACQUIRED=false
+  fi
+}
+
+trap release_lock EXIT INT TERM
+
+sed_i() {
+  local expr="$1"
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed -i '' "$expr" "$STATE_FILE"
+  else
+    sed -i "$expr" "$STATE_FILE"
+  fi
+}
+
 show_help() {
   cat << 'EOF'
 Human-Agent-in-the-Loop (HAIL) Workflow Controller
@@ -82,10 +106,7 @@ acquire_lock() {
     fi
     sleep 0.5
   done
-}
-
-release_lock() {
-  rmdir "$LOCK_DIR" 2>/dev/null || true
+  LOCK_ACQUIRED=true
 }
 
 # --------------------------------------------------------------------------
@@ -249,9 +270,6 @@ PYEOF
     jq "$jq_expr" "$STATE_FILE" > "$tmp"
     mv "$tmp" "$STATE_FILE"
   else
-    local is_mac=false
-    [[ "$(uname)" == "Darwin" ]] && is_mac=true
-    sed_i() { if $is_mac; then sed -i '' "$1" "$STATE_FILE"; else sed -i "$1" "$STATE_FILE"; fi; }
     sed_i "s/\"phase\": $current_phase/\"phase\": $new_phase/"
     sed_i "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"$new_name\"/"
     sed_i "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/"
@@ -276,7 +294,6 @@ advance_phase() {
   fi
 
   acquire_lock || return 1
-  trap 'release_lock' RETURN
 
   local current_phase
   current_phase=$(read_json_field "phase")
@@ -344,7 +361,6 @@ revert_phase() {
   fi
 
   acquire_lock || return 1
-  trap 'release_lock' RETURN
 
   local current_phase
   current_phase=$(read_json_field "phase")
@@ -401,7 +417,6 @@ complete_workflow() {
   fi
 
   acquire_lock || return 1
-  trap 'release_lock' RETURN
 
   local timestamp
   timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -427,7 +442,7 @@ PYEOF
     jq ".active = false | .phase = 9 | .phase_name = \"Implement Phase\" | .last_updated = \"$timestamp\"" "$STATE_FILE" > "$tmp"
     mv "$tmp" "$STATE_FILE"
   else
-    sed -i "s/\"active\": true/\"active\": false/" "$STATE_FILE"
+    sed_i "s/\"active\": true/\"active\": false/"
   fi
 
   echo "✅ HAIL workflow marked as complete. State preserved for reference."
