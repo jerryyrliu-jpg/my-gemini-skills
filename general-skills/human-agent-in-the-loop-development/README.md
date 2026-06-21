@@ -15,9 +15,14 @@ This skill defines the Human-Agent-in-the-Loop (HAIL) development workflow, ensu
 
 ## Version
 
-1.4.0
+1.4.1
 
 ## Change List
+
+- **v1.4.1 (2026-06-21)** — Fixed lock safety and macOS compatibility bugs
+  - Fix global exit trap lock deletion bug by introducing `LOCK_ACQUIRED` state flag
+  - Fix macOS `sed -i` fallback bug in `complete_workflow` by using global `sed_i` helper
+  - Align `SKILL.md` flowchart with `README.md` by adding the `Done` node
 
 - **v1.4.0 (2026-06-21)** — Fixed all Opus Round 2 review findings
   - Anchor `STATE_FILE` and `LOCK_DIR` to `git rev-parse --show-toplevel` (fixes silent state loss when agent `cd`s to subdirectory)
