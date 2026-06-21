@@ -15,9 +15,14 @@ This skill defines the Human-Agent-in-the-Loop (HAIL) development workflow, ensu
 
 ## Version
 
-1.5.1
+1.6.0
 
 ## Change List
+
+- **v1.6.0 (2026-06-21)** — Branch-specific state files, revert counter resetting, and embedded reviewer prompt rubric
+  - Support branch isolation by appending current branch name to state JSON and lock directory (fixes state conflicts between parallel development branches)
+  - Reset iteration counters (`doc_review_iterations` and `plan_review_iterations`) when reverting past their respective creation boundaries (fixes permanent lockup on escalation)
+  - Embed severity rubric definitions directly into Phase 4 and Phase 7 reviewer prompt templates in `SKILL.md` (fixes missing rubric context in reviewer subagents)
 
 - **v1.5.1 (2026-06-21)** — Fixed Opus Round 1 review findings (1 HIGH, 1 MEDIUM, 1 LOW)
   - FIX(HIGH): `read_json_field` jq path changed from `.field // empty` to `.field | if . == null then empty else . end`; the `//` alternative operator treats `false` as falsy, returning `""` instead of `"false"` — silently breaking the `active=false` guards in `advance_phase` and `show_status`

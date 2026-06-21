@@ -129,7 +129,12 @@ The reviewer MUST end the response with one of:
 
 1. Dispatch a `code-reviewer` subagent with the design doc as input. Use this prompt template:
 
-   > "Perform an adversarial review of the attached design document. Identify logical gaps, missing edge cases, undefined error handling, and architectural risks. Classify each finding as High / Medium / Low using the severity rubric in the HAIL skill. End with: VERDICT: No Medium/High issues found. OR VERDICT: Medium/High issues found (listed above)."
+   > "Perform an adversarial review of the attached design document. Identify logical gaps, missing edge cases, undefined error handling, and architectural risks.
+   > Classify each finding as High, Medium, or Low:
+   > - High: Blocks feature from working, creates wrong architecture, or misses a critical requirement.
+   > - Medium: Significant gap, risk, or ambiguity that should be addressed before coding.
+   > - Low: Minor improvement, nice-to-have, or low probability edge case.
+   > End with: VERDICT: No Medium/High issues found. OR VERDICT: Medium/High issues found (listed above)."
 
 2. Read the VERDICT line and evaluate:
    - **"No Medium/High issues found"** → call `advance`, proceed to Phase 5
@@ -151,7 +156,12 @@ bash "$HAIL_SCRIPT" revert --force 2
 
 1. Dispatch a `code-reviewer` subagent with the execution plan as input. Use this prompt template:
 
-   > "Perform an adversarial review of the attached execution plan. Verify it covers all requirements from the design doc, that each checkpoint is concrete and independently verifiable, and that the implementation order is logically sound. Classify each finding as High / Medium / Low using the severity rubric in the HAIL skill. End with: VERDICT: No Medium/High issues found. OR VERDICT: Medium/High issues found (listed above)."
+   > "Perform an adversarial review of the attached execution plan. Verify it covers all requirements from the design doc, that each checkpoint is concrete and independently verifiable, and that the implementation order is logically sound.
+   > Classify each finding as High, Medium, or Low:
+   > - High: Blocks feature from working, creates wrong architecture, or misses a critical requirement.
+   > - Medium: Significant gap, risk, or ambiguity that should be addressed before coding.
+   > - Low: Minor improvement, nice-to-have, or low probability edge case.
+   > End with: VERDICT: No Medium/High issues found. OR VERDICT: Medium/High issues found (listed above)."
 
 2. Read the VERDICT line and evaluate:
    - **"No Medium/High issues found"** → call `advance`, proceed to Phase 8

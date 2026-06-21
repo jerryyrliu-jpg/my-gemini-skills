@@ -5,10 +5,24 @@
 
 set -euo pipefail
 
-PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-STATE_FILE="$PROJECT_ROOT/.gemini/hail-state.json"
-LOCK_DIR="$PROJECT_ROOT/.gemini/.hail.lock"
-MAX_REVIEW_ITERATIONS=10
+find_project_root() {
+  local dir
+  dir="$(pwd)"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -d "$dir/.git" || -d "$dir/.gemini" ]]; then
+      echo "$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+  pwd
+}
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || find_project_root)
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "default")
+SAFE_BRANCH_NAME=$(echo "$CURRENT_BRANCH" | tr '/' '-')
+STATE_FILE="$PROJECT_ROOT/.gemini/hail-state-${SAFE_BRANCH_NAME}.json"
+LOCK_DIR="$PROJECT_ROOT/.gemini/.hail-${SAFE_BRANCH_NAME}.lock"
+MAX_REVIEW_ITERATIONS="${MAX_REVIEW_ITERATIONS:-10}"
 
 LOCK_ACQUIRED=false
 TEMP_FILES=()
@@ -176,7 +190,7 @@ d = {
     "started_at": os.environ['HAIL_TIMESTAMP'],
     "last_updated": os.environ['HAIL_TIMESTAMP'],
 }
-with open(os.environ['HAIL_STATE_FILE'], 'w') as f:
+with open(os.environ['HAIL_STATE_FILE'], 'w', encoding='utf-8') as f:
     json.dump(d, f, indent=2)
 PYEOF
   elif command -v jq >/dev/null 2>&1; then
@@ -229,7 +243,7 @@ read_json_field() {
     # FIX(HIGH+MEDIUM): pass STATE_FILE via env var; normalize bool with lower()
     # so Python False → "false" not "False", matching grep fallback and jq output
     HAIL_STATE_FILE="$STATE_FILE" python3 -c \
-      "import json,os; v=json.load(open(os.environ['HAIL_STATE_FILE'])).get('$field'); print('' if v is None else (str(v).lower() if isinstance(v, bool) else v))"
+      "import json,os; v=json.load(open(os.environ['HAIL_STATE_FILE'], encoding='utf-8')).get('$field'); print('' if v is None else (str(v).lower() if isinstance(v, bool) else v))"
   else
     grep -o "\"$field\": *\"*[^\",]*\"*" "$STATE_FILE" | cut -d':' -f2 | tr -d ' ",'
   fi
@@ -306,13 +320,14 @@ phase_name_for() {
   esac
 }
 
-# write_phase: update phase/name/timestamp in state JSON, optionally increment a counter.
+# write_phase: update phase/name/timestamp in state JSON, optionally increment a counter or reset keys.
 # Uses atomic write (temp file + replace) for python3 and jq paths.
 write_phase() {
   local current_phase="$1"
   local new_phase="$2"
   local new_name="$3"
   local increment_key="${4:-}"
+  local reset_keys="${5:-}"
   local timestamp
   timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -324,10 +339,11 @@ write_phase() {
     HAIL_NEW_NAME="$new_name" \
     HAIL_TIMESTAMP="$timestamp" \
     HAIL_INCREMENT_KEY="${increment_key:-}" \
+    HAIL_RESET_KEYS="${reset_keys:-}" \
     python3 - <<'PYEOF'
 import json, os, tempfile
 state_file = os.environ['HAIL_STATE_FILE']
-with open(state_file, 'r') as f:
+with open(state_file, 'r', encoding='utf-8') as f:
     d = json.load(f)
 d['phase'] = int(os.environ['HAIL_NEW_PHASE'])
 d['phase_name'] = os.environ['HAIL_NEW_NAME']
@@ -335,8 +351,12 @@ d['last_updated'] = os.environ['HAIL_TIMESTAMP']
 inc_key = os.environ.get('HAIL_INCREMENT_KEY', '')
 if inc_key:
     d[inc_key] = d.get(inc_key, 0) + 1
+res_keys = os.environ.get('HAIL_RESET_KEYS', '')
+if res_keys:
+    for k in res_keys.split():
+        d[k] = 0
 dir_name = os.path.dirname(state_file) or '.'
-with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, suffix='.tmp') as tf:
+with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, suffix='.tmp', encoding='utf-8') as tf:
     json.dump(d, tf, indent=2)
     tmp_path = tf.name
 os.replace(tmp_path, state_file)
@@ -349,6 +369,12 @@ PYEOF
     jq_expr=".phase = $new_phase | .phase_name = \"$new_name\" | .last_updated = \"$timestamp\""
     if [[ -n "$increment_key" ]]; then
       jq_expr="$jq_expr | .$increment_key = (.$increment_key // 0) + 1"
+    fi
+    if [[ -n "$reset_keys" ]]; then
+      local r_key
+      for r_key in $reset_keys; do
+        jq_expr="$jq_expr | .$r_key = 0"
+      done
     fi
     jq "$jq_expr" "$STATE_FILE" > "$tmp"
     mv "$tmp" "$STATE_FILE"
@@ -363,6 +389,15 @@ PYEOF
       cur_val="${cur_val:-0}"
       local new_val=$(( cur_val + 1 ))
       sed_i "s/\"$increment_key\": $cur_val/\"$increment_key\": $new_val/"
+    fi
+    if [[ -n "$reset_keys" ]]; then
+      local r_key
+      for r_key in $reset_keys; do
+        local cur_val
+        cur_val=$(grep -o "\"$r_key\": *[0-9]*" "$STATE_FILE" | grep -oE '[0-9]+' | head -1 || echo "0")
+        cur_val="${cur_val:-0}"
+        sed_i "s/\"$r_key\": $cur_val/\"$r_key\": 0/"
+      done
     fi
   fi
 }
@@ -493,10 +528,14 @@ revert_phase() {
     fi
   fi
 
-  local target_name
+  local target_name reset_keys=""
   target_name=$(phase_name_for "$target_phase")
 
-  write_phase "$current_phase" "$target_phase" "$target_name"
+  # Reset iteration counts if reverting past the respective creation phases
+  [[ $target_phase -le 2 ]] && reset_keys="doc_review_iterations"
+  [[ $target_phase -le 6 ]] && reset_keys="${reset_keys:+$reset_keys }plan_review_iterations"
+
+  write_phase "$current_phase" "$target_phase" "$target_name" "" "$reset_keys"
   echo "⏪ Reverted from Phase $current_phase to Phase $target_phase ($target_name)"
   show_status
 }
@@ -519,14 +558,14 @@ complete_workflow() {
     python3 - <<'PYEOF'
 import json, os, tempfile
 state_file = os.environ['HAIL_STATE_FILE']
-with open(state_file, 'r') as f:
+with open(state_file, 'r', encoding='utf-8') as f:
     d = json.load(f)
 d['active'] = False
 d['phase'] = 9
 d['phase_name'] = 'Implement Phase'
 d['last_updated'] = os.environ['HAIL_TIMESTAMP']
 dir_name = os.path.dirname(state_file) or '.'
-with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, suffix='.tmp') as tf:
+with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, suffix='.tmp', encoding='utf-8') as tf:
     json.dump(d, tf, indent=2)
     tmp_path = tf.name
 os.replace(tmp_path, state_file)
