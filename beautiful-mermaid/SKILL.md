@@ -57,8 +57,8 @@ description: "產出極具美感的 Mermaid 圖表（Block Diagram, Sequence, Fl
 }}%%
 graph TD
   %% 樣式定義 (ClassDef)
-  classDef user fill:#7aa2f7,stroke:#3d59a1,stroke-width:2px,color:#ffffff,rx:10px,ry:10px;
-  classDef db fill:#9ece6a,stroke:#73daca,stroke-width:2px,color:#1a1b26,rx:6px,ry:6px;
+  classDef user fill:#7aa2f7,stroke:#3d59a1,stroke-width:2px,color:#ffffff;
+  classDef db fill:#9ece6a,stroke:#73daca,stroke-width:2px,color:#1a1b26;
   classDef process fill:#24283b,stroke:#565f89,stroke-width:1px,color:#c0caf5;
   classDef warning fill:#f7768e,stroke:#db4b4b,stroke-width:2px,color:#ffffff;
 
