@@ -44,15 +44,15 @@ description: "產出極具美感的 Mermaid 圖表（Block Diagram, Sequence, Fl
 ### 1. 流程圖 / 區塊圖 (Flowchart / Block Diagram)
 ```mermaid
 %%{init: {
-  'theme': 'base',
-  'themeVariables': {
-    'fontFamily': 'Inter, system-ui, sans-serif',
-    'background': '#1a1b26',
-    'primaryColor': '#24283b',
-    'primaryTextColor': '#c0caf5',
-    'lineColor': '#565f89',
-    'edgeLabelBackground':'#1a1b26',
-    'tertiaryColor': '#1f2335'
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Inter, system-ui, sans-serif",
+    "background": "#1a1b26",
+    "primaryColor": "#24283b",
+    "primaryTextColor": "#c0caf5",
+    "lineColor": "#565f89",
+    "edgeLabelBackground": "#1a1b26",
+    "tertiaryColor": "#1f2335"
   }
 }}%%
 graph TD
@@ -63,7 +63,7 @@ graph TD
   classDef warning fill:#f7768e,stroke:#db4b4b,stroke-width:2px,color:#ffffff;
 
   subgraph 系統邊界 [System Boundary]
-    UI[使用者介面]:::user --> API[後端 API 服務]:::process
+    UI([使用者介面]):::user --> API[後端 API 服務]:::process
     API --> Cache[(Redis 快取)]:::db
     API --> DB[(SQL 資料庫)]:::db
     API -.-> Log{寫入日誌失敗?}:::process
@@ -74,21 +74,21 @@ graph TD
 ### 2. 時序圖 (Sequence Diagram)
 ```mermaid
 %%{init: {
-  'theme': 'base',
-  'themeVariables': {
-    'fontFamily': 'Inter, system-ui, sans-serif',
-    'background': '#1a1b26',
-    'actorBorder': '#565f89',
-    'actorBkg': '#24283b',
-    'actorTextColor': '#c0caf5',
-    'actorLineColor': '#565f89',
-    'signalColor': '#7aa2f7',
-    'signalTextColor': '#c0caf5',
-    'labelBoxBkgColor': '#24283b',
-    'labelBoxBorderColor': '#565f89',
-    'labelTextColor': '#c0caf5',
-    'loopLimitBkgColor': '#1f2335',
-    'loopLimitBorderColor': '#565f89'
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Inter, system-ui, sans-serif",
+    "background": "#1a1b26",
+    "actorBorder": "#565f89",
+    "actorBkg": "#24283b",
+    "actorTextColor": "#c0caf5",
+    "actorLineColor": "#565f89",
+    "signalColor": "#7aa2f7",
+    "signalTextColor": "#c0caf5",
+    "labelBoxBkgColor": "#24283b",
+    "labelBoxBorderColor": "#565f89",
+    "labelTextColor": "#c0caf5",
+    "loopLimitBkgColor": "#1f2335",
+    "loopLimitBorderColor": "#565f89"
   }
 }}%%
 sequenceDiagram
