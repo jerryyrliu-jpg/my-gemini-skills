@@ -17,13 +17,18 @@ USAGE:
 COMMANDS:
   init [DESIGN_DOC_PATH] [PLAN_PATH]
       Initialize the HAIL workflow loop.
-  
+
   status
       Print current phase and next steps.
-  
+
   advance
-      Advance to the next phase.
-  
+      Advance to the next phase (after review passes or step completes).
+
+  revert <PHASE_NUMBER>
+      Revert to a specific phase (after review finds issues).
+      Use phase 2 when design doc review (phase 4) finds issues.
+      Use phase 6 when plan review (phase 7) finds issues.
+
   cancel
       Reset or terminate the workflow.
 
@@ -111,6 +116,57 @@ show_status() {
   esac
 }
 
+phase_name_for() {
+  case "$1" in
+    1) echo "Discuss Phase" ;;
+    2) echo "Write Design Doc" ;;
+    3) echo "Human Review" ;;
+    4) echo "Subagent Review Doc" ;;
+    5) echo "Human Review Optional" ;;
+    6) echo "Write Plan" ;;
+    7) echo "Subagent Review Plan" ;;
+    8) echo "Human Final Review" ;;
+    9) echo "Implement Phase" ;;
+    *) echo "" ;;
+  esac
+}
+
+write_phase() {
+  local current_phase="$1"
+  local new_phase="$2"
+  local new_name="$3"
+  local timestamp
+  timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c "
+import json
+with open('$STATE_FILE', 'r') as f:
+    d = json.load(f)
+d['phase'] = $new_phase
+d['phase_name'] = '$new_name'
+d['last_updated'] = '$timestamp'
+with open('$STATE_FILE', 'w') as f:
+    json.dump(d, f, indent=2)
+"
+  elif command -v jq >/dev/null 2>&1; then
+    local tmp
+    tmp=$(mktemp)
+    jq ".phase = $new_phase | .phase_name = \"$new_name\" | .last_updated = \"$timestamp\"" "$STATE_FILE" > "$tmp"
+    mv "$tmp" "$STATE_FILE"
+  else
+    if [[ "$(uname)" == "Darwin" ]]; then
+      sed -i '' "s/\"phase\": $current_phase/\"phase\": $new_phase/" "$STATE_FILE"
+      sed -i '' "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"$new_name\"/" "$STATE_FILE"
+      sed -i '' "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/" "$STATE_FILE"
+    else
+      sed -i "s/\"phase\": $current_phase/\"phase\": $new_phase/" "$STATE_FILE"
+      sed -i "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"$new_name\"/" "$STATE_FILE"
+      sed -i "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/" "$STATE_FILE"
+    fi
+  fi
+}
+
 advance_phase() {
   if [[ ! -f "$STATE_FILE" ]]; then
     echo "❌ HAIL loop is not initialized."
@@ -126,55 +182,58 @@ advance_phase() {
   fi
 
   local next_phase=$((current_phase + 1))
-  
+
   if [[ $next_phase -gt 9 ]]; then
     echo "🎉 Already at final implementation phase!"
     return 0
   fi
-  
-  local next_name=""
-  case "$next_phase" in
-    2) next_name="Write Design Doc" ;;
-    3) next_name="Human Review" ;;
-    4) next_name="Subagent Review Doc" ;;
-    5) next_name="Human Review Optional" ;;
-    6) next_name="Write Plan" ;;
-    7) next_name="Subagent Review Plan" ;;
-    8) next_name="Human Final Review" ;;
-    9) next_name="Implement Phase" ;;
-  esac
 
-  # Safe json modification using Python or jq if available, fallback to sed
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -c "
-import json
-with open('$STATE_FILE', 'r') as f:
-    d = json.load(f)
-d['phase'] = $next_phase
-d['phase_name'] = '$next_name'
-d['last_updated'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
-with open('$STATE_FILE', 'w') as f:
-    json.dump(d, f, indent=2)
-"
-  elif command -v jq >/dev/null 2>&1; then
-    local tmp
-    tmp=$(mktemp)
-    jq ".phase = $next_phase | .phase_name = \"$next_name\" | .last_updated = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" "$STATE_FILE" > "$tmp"
-    mv "$tmp" "$STATE_FILE"
-  else
-    # sed backup
-    if [[ "$(uname)" == "Darwin" ]]; then
-      sed -i '' "s/\"phase\": $current_phase/\"phase\": $next_phase/" "$STATE_FILE"
-      sed -i '' "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"$next_name\"/" "$STATE_FILE"
-      sed -i '' "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" "$STATE_FILE"
-    else
-      sed -i "s/\"phase\": $current_phase/\"phase\": $next_phase/" "$STATE_FILE"
-      sed -i "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"$next_name\"/" "$STATE_FILE"
-      sed -i "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" "$STATE_FILE"
-    fi
+  local next_name
+  next_name=$(phase_name_for "$next_phase")
+
+  write_phase "$current_phase" "$next_phase" "$next_name"
+  echo "➡️ Advanced from Phase $current_phase to Phase $next_phase ($next_name)"
+  show_status
+}
+
+revert_phase() {
+  if [[ $# -lt 1 ]]; then
+    echo "❌ Usage: bash hail-loop.sh revert <PHASE_NUMBER>"
+    echo "   Example: bash hail-loop.sh revert 2  (revert to Write Design Doc after review issues)"
+    echo "   Example: bash hail-loop.sh revert 6  (revert to Write Plan after review issues)"
+    return 1
   fi
 
-  echo "➡️ Advanced from Phase $current_phase to Phase $next_phase ($next_name)"
+  if [[ ! -f "$STATE_FILE" ]]; then
+    echo "❌ HAIL loop is not initialized."
+    return 1
+  fi
+
+  local target_phase="$1"
+
+  if [[ ! "$target_phase" =~ ^[1-9]$ ]]; then
+    echo "❌ Invalid phase '$target_phase'. Must be a number between 1 and 9."
+    return 1
+  fi
+
+  local current_phase
+  current_phase=$(read_json_field "phase")
+
+  if [[ ! "$current_phase" =~ ^[0-9]+$ ]]; then
+    echo "❌ Error: Could not read a valid phase from $STATE_FILE"
+    return 1
+  fi
+
+  if [[ $target_phase -ge $current_phase ]]; then
+    echo "❌ Cannot revert to Phase $target_phase — current phase is $current_phase. Use 'advance' to move forward."
+    return 1
+  fi
+
+  local target_name
+  target_name=$(phase_name_for "$target_phase")
+
+  write_phase "$current_phase" "$target_phase" "$target_name"
+  echo "⏪ Reverted from Phase $current_phase to Phase $target_phase ($target_name)"
   show_status
 }
 
@@ -205,6 +264,9 @@ case "$COMMAND" in
     ;;
   advance)
     advance_phase
+    ;;
+  revert)
+    revert_phase "$@"
     ;;
   cancel)
     cancel_workflow

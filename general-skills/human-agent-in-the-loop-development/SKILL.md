@@ -93,9 +93,43 @@ graph TD
 | **(8)** | **Human Final Review** | Human | Human performs final approval of the plan, providing the green light to begin coding. |
 | **(9)** | **Enter Implementation & Verification** | Agent + Subagent | Write code and tests following `test-driven-development` and `verification-before-completion` specifications. |
 
+## Subagent Review Loop Protocol
+
+This is the decision protocol the agent MUST follow after each subagent review phase. It is the mechanism that makes the review loop self-correcting.
+
+### Phase 4 — Subagent Review Doc
+
+1. Dispatch a `code-reviewer` subagent with the design doc as input. Prompt the subagent to perform an adversarial review, identifying logical gaps, missing edge cases, and architectural risks. Ask it to classify each finding as **Low / Medium / High** risk.
+2. Evaluate the findings:
+   - **No findings, or Low risk only** → call `advance` and proceed to Phase 5.
+   - **Any Medium or High risk finding** → call `revert 2`, revise the design doc to address the issues, and re-enter Phase 3 (human review) before returning to Phase 4.
+
+```bash
+# Review passed — no Medium/High issues
+bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh advance
+
+# Review failed — issues found, revert to Write Design Doc
+bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh revert 2
+```
+
+### Phase 7 — Subagent Review Plan
+
+1. Dispatch a `code-reviewer` subagent with the execution plan as input. Prompt it to verify that the plan covers all design doc requirements, that checkpoints are concrete and verifiable, and that the implementation order is logically sound. Classify each finding as **Low / Medium / High** risk.
+2. Evaluate the findings:
+   - **No findings, or Low risk only** → call `advance` and proceed to Phase 8.
+   - **Any Medium or High risk finding** → call `revert 6`, revise the plan, and re-enter Phase 7.
+
+```bash
+# Review passed — no Medium/High issues
+bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh advance
+
+# Review failed — issues found, revert to Write Plan
+bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh revert 6
+```
+
 ## HAIL Loop Script Control
 
-This skill provides a dedicated workflow state management and loop control script. The agent can invoke this script to initialize state, check progress, and advance phases, avoiding external dependencies on `ralph-loop`.
+This skill provides a dedicated workflow state management and loop control script. The agent can invoke this script to initialize state, check progress, advance phases, or revert to an earlier phase when a review fails.
 
 ### Usage
 
@@ -109,12 +143,20 @@ This skill provides a dedicated workflow state management and loop control scrip
    bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh status
    ```
 
-3. **Advance to the Next Phase** (e.g., after completing design or passing a review loop):
+3. **Advance to the Next Phase** (after a step completes or a review passes):
    ```bash
    bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh advance
    ```
 
-4. **Reset or Cancel the Loop**:
+4. **Revert to a Previous Phase** (after a review finds Medium/High issues):
+   ```bash
+   bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh revert <PHASE_NUMBER>
+   ```
+   Common revert targets:
+   - `revert 2` — design doc review (Phase 4) found issues → rewrite design doc
+   - `revert 6` — plan review (Phase 7) found issues → rewrite plan
+
+5. **Reset or Cancel the Loop**:
    ```bash
    bash .agents/skills/human-agent-in-the-loop-development/scripts/hail-loop.sh cancel
    ```
