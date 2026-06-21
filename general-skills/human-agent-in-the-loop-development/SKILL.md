@@ -56,6 +56,7 @@ graph TD
   HumanFinalReview["(8) Human Final Review<br>(Human Final Approval)"]:::human
   
   ImplementPhase["(9) Enter Implementation & Verification<br>(TDD & Code Reviews)"]:::phase
+  Done([Done<br>bash complete]):::startEnd
 
   %% Connections
   Start --> DiscussPhase
@@ -77,6 +78,7 @@ graph TD
   CheckPlanIssues -- "No (No issues or Low Risk only)" --> HumanFinalReview
   
   HumanFinalReview --> ImplementPhase
+  ImplementPhase --> Done
 ```
 
 ## Detailed Steps & Skill Integration

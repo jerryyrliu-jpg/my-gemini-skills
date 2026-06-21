@@ -65,7 +65,7 @@ acquire_lock() {
   local retries=0
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     retries=$((retries + 1))
-    if [[ $retries -eq 2 && -d "$LOCK_DIR" ]]; then
+    if [[ $retries -ge 2 && -d "$LOCK_DIR" ]]; then
       local mtime
       if mtime=$(stat -c %Y "$LOCK_DIR" 2>/dev/null || stat -f %m "$LOCK_DIR" 2>/dev/null); then
         local lock_age=$(( $(date +%s) - mtime ))
@@ -119,7 +119,7 @@ init_state() {
   mkdir -p "$PROJECT_ROOT/.gemini"
 
   local state_tmp
-  state_tmp=$(mktemp -p "$PROJECT_ROOT/.gemini" .hail-init.XXXXXX)
+  state_tmp=$(mktemp "$PROJECT_ROOT/.gemini/.hail-init.XXXXXX")
   cat > "$state_tmp" <<EOF
 {
   "active": true,
@@ -241,7 +241,7 @@ os.replace(tmp_path, '$STATE_FILE')
 PYEOF
   elif command -v jq >/dev/null 2>&1; then
     local tmp jq_expr
-    tmp=$(mktemp)
+    tmp=$(mktemp "$PROJECT_ROOT/.gemini/.hail-state-tmp.XXXXXX")
     jq_expr=".phase = $new_phase | .phase_name = \"$new_name\" | .last_updated = \"$timestamp\""
     if [[ -n "$increment_key" ]]; then
       jq_expr="$jq_expr | .$increment_key = (.$increment_key // 0) + 1"
@@ -423,7 +423,7 @@ os.replace(tmp_path, '$STATE_FILE')
 PYEOF
   elif command -v jq >/dev/null 2>&1; then
     local tmp
-    tmp=$(mktemp)
+    tmp=$(mktemp "$PROJECT_ROOT/.gemini/.hail-state-tmp.XXXXXX")
     jq ".active = false | .phase = 9 | .phase_name = \"Implement Phase\" | .last_updated = \"$timestamp\"" "$STATE_FILE" > "$tmp"
     mv "$tmp" "$STATE_FILE"
   else
