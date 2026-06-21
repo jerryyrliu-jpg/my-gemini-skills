@@ -176,10 +176,11 @@ This skill provides a dedicated workflow state management and loop control scrip
 Locate the script once at the start of a session and store it in a variable:
 
 ```bash
-HAIL_SCRIPT=$(find . -name hail-loop.sh -path "*/human-agent-in-the-loop-development/*" | head -1)
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+HAIL_SCRIPT=$(find "$PROJECT_ROOT" -name hail-loop.sh -path "*/human-agent-in-the-loop-development/*" | head -1)
 ```
 
-Use `$HAIL_SCRIPT` in all commands below.
+Use `$HAIL_SCRIPT` in all commands below. Anchoring to `PROJECT_ROOT` ensures the script is found regardless of which subdirectory the agent is currently in.
 
 ### Usage
 
@@ -210,12 +211,18 @@ Use `$HAIL_SCRIPT` in all commands below.
    - `revert 2` — design doc review (Phase 4) found issues → rewrite design doc
    - `revert 6` — plan review (Phase 7) found issues → rewrite plan
 
-5. **Reset or Cancel the Loop**:
+5. **Mark Workflow Complete** (after implementation is done):
+   ```bash
+   bash "$HAIL_SCRIPT" complete
+   ```
+   Marks `active: false` and preserves state for reference. After `complete`, `init` can be run without `--force` to start a new workflow.
+
+6. **Reset or Cancel the Loop**:
    ```bash
    bash "$HAIL_SCRIPT" cancel
    ```
 
 ### State Tracking
-Workflow state is stored at `.gemini/hail-state.json`. Fields include `phase`, `doc_review_iterations`, `plan_review_iterations`, and timestamps — readable by both the agent and review subagents.
+Workflow state is stored at `$PROJECT_ROOT/.gemini/hail-state.json` (project-root relative, not cwd-relative — safe across subdirectory changes). Fields include `phase`, `doc_review_iterations`, `plan_review_iterations`, and timestamps — readable by both the agent and review subagents.
 
-If the state file is corrupted, run `bash "$HAIL_SCRIPT" init --force` to reset.
+If the state file is corrupted or empty, run `bash "$HAIL_SCRIPT" init --force` to reset.

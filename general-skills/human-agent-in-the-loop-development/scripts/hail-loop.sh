@@ -5,8 +5,9 @@
 
 set -euo pipefail
 
-STATE_FILE=".gemini/hail-state.json"
-LOCK_DIR=".gemini/.hail.lock"
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+STATE_FILE="$PROJECT_ROOT/.gemini/hail-state.json"
+LOCK_DIR="$PROJECT_ROOT/.gemini/.hail.lock"
 MAX_REVIEW_ITERATIONS=10
 
 show_help() {
@@ -35,6 +36,10 @@ COMMANDS:
         revert 2  — design doc review (phase 4) found issues
         revert 6  — plan review (phase 7) found issues
 
+  complete
+      Mark the workflow as complete when implementation is done.
+      Preserves state for reference; run 'init' to start a new workflow.
+
   cancel
       Reset or terminate the workflow (removes state file).
 
@@ -56,10 +61,21 @@ EOF
 # --------------------------------------------------------------------------
 
 acquire_lock() {
-  mkdir -p .gemini
+  mkdir -p "$PROJECT_ROOT/.gemini"
   local retries=0
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     retries=$((retries + 1))
+    if [[ $retries -eq 2 && -d "$LOCK_DIR" ]]; then
+      local mtime
+      if mtime=$(stat -c %Y "$LOCK_DIR" 2>/dev/null || stat -f %m "$LOCK_DIR" 2>/dev/null); then
+        local lock_age=$(( $(date +%s) - mtime ))
+        if [[ $lock_age -gt 30 ]]; then
+          echo "⚠️  Stale lock detected (${lock_age}s old). Removing automatically."
+          rmdir "$LOCK_DIR" 2>/dev/null || true
+          continue
+        fi
+      fi
+    fi
     if [[ $retries -ge 20 ]]; then
       echo "❌ Could not acquire state lock after 10s. Remove '$LOCK_DIR' if stale."
       return 1
@@ -90,16 +106,21 @@ init_state() {
   plan_path="${plan_path//\"/\\\"}"
 
   if [[ -f "$STATE_FILE" ]] && ! $force; then
-    local current_phase
+    local current_phase current_active
     current_phase=$(read_json_field "phase" 2>/dev/null || echo "unknown")
-    echo "❌ A HAIL loop is already active (Phase $current_phase)."
-    echo "   Use '--force' to overwrite: bash hail-loop.sh init --force [DOC] [PLAN]"
-    return 1
+    current_active=$(read_json_field "active" 2>/dev/null || echo "true")
+    if [[ "$current_active" != "false" && "$current_phase" != "9" ]]; then
+      echo "❌ A HAIL loop is already active (Phase $current_phase)."
+      echo "   Use '--force' to overwrite: bash hail-loop.sh init --force [DOC] [PLAN]"
+      return 1
+    fi
   fi
 
-  mkdir -p .gemini
+  mkdir -p "$PROJECT_ROOT/.gemini"
 
-  cat > "$STATE_FILE" <<EOF
+  local state_tmp
+  state_tmp=$(mktemp -p "$PROJECT_ROOT/.gemini" .hail-init.XXXXXX)
+  cat > "$state_tmp" <<EOF
 {
   "active": true,
   "phase": 1,
@@ -112,6 +133,7 @@ init_state() {
   "last_updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
+  mv "$state_tmp" "$STATE_FILE"
   echo "✅ HAIL Loop initialized successfully!"
   show_status
 }
@@ -133,8 +155,13 @@ show_status() {
     return 1
   fi
 
-  # Guard against corrupted JSON
-  if command -v jq >/dev/null 2>&1 && ! jq empty "$STATE_FILE" 2>/dev/null; then
+  # Guard against empty or corrupted JSON
+  if [[ ! -s "$STATE_FILE" ]]; then
+    echo "❌ State file is empty: $STATE_FILE"
+    echo "   Run 'bash hail-loop.sh init --force' to reset."
+    return 1
+  fi
+  if command -v jq >/dev/null 2>&1 && ! jq -e . "$STATE_FILE" >/dev/null 2>&1; then
     echo "❌ State file is corrupted: $STATE_FILE"
     echo "   Run 'bash hail-loop.sh init --force' to reset."
     return 1
@@ -332,6 +359,15 @@ revert_phase() {
     return 1
   fi
 
+  # Warn for non-canonical revert paths
+  local is_canonical=false
+  [[ $current_phase -eq 4 && $target_phase -eq 2 ]] && is_canonical=true
+  [[ $current_phase -eq 7 && $target_phase -eq 6 ]] && is_canonical=true
+  if ! $is_canonical; then
+    echo "⚠️  Non-canonical revert: Phase $current_phase → Phase $target_phase."
+    echo "   Standard paths: revert 2 (from phase 4), revert 6 (from phase 7)."
+  fi
+
   # Block the loop when the iteration cap is reached for the two canonical revert paths
   local cap_key=""
   [[ $current_phase -eq 4 && $target_phase -eq 2 ]] && cap_key="doc_review_iterations"
@@ -358,6 +394,46 @@ revert_phase() {
   show_status
 }
 
+complete_workflow() {
+  if [[ ! -f "$STATE_FILE" ]]; then
+    echo "❌ No active HAIL loop to complete."
+    return 1
+  fi
+
+  acquire_lock || return 1
+  trap 'release_lock' RETURN
+
+  local timestamp
+  timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - <<PYEOF
+import json, os, tempfile
+with open('$STATE_FILE', 'r') as f:
+    d = json.load(f)
+d['active'] = False
+d['phase'] = 9
+d['phase_name'] = 'Implement Phase'
+d['last_updated'] = '$timestamp'
+dir_name = os.path.dirname('$STATE_FILE') or '.'
+with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, suffix='.tmp') as tf:
+    json.dump(d, tf, indent=2)
+    tmp_path = tf.name
+os.replace(tmp_path, '$STATE_FILE')
+PYEOF
+  elif command -v jq >/dev/null 2>&1; then
+    local tmp
+    tmp=$(mktemp)
+    jq ".active = false | .phase = 9 | .phase_name = \"Implement Phase\" | .last_updated = \"$timestamp\"" "$STATE_FILE" > "$tmp"
+    mv "$tmp" "$STATE_FILE"
+  else
+    sed -i "s/\"active\": true/\"active\": false/" "$STATE_FILE"
+  fi
+
+  echo "✅ HAIL workflow marked as complete. State preserved for reference."
+  echo "   Run 'bash hail-loop.sh init' to start a new workflow."
+}
+
 cancel_workflow() {
   if [[ -f "$STATE_FILE" ]]; then
     rm -f "$STATE_FILE"
@@ -381,10 +457,11 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  init)    init_state "$@" ;;
-  status)  show_status ;;
-  advance) advance_phase ;;
-  revert)  revert_phase "$@" ;;
-  cancel)  cancel_workflow ;;
-  *)       show_help; exit 1 ;;
+  init)     init_state "$@" ;;
+  status)   show_status ;;
+  advance)  advance_phase ;;
+  revert)   revert_phase "$@" ;;
+  complete) complete_workflow ;;
+  cancel)   cancel_workflow ;;
+  *)        show_help; exit 1 ;;
 esac
