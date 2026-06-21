@@ -11,6 +11,7 @@ LOCK_DIR="$PROJECT_ROOT/.gemini/.hail.lock"
 MAX_REVIEW_ITERATIONS=10
 
 LOCK_ACQUIRED=false
+TEMP_FILES=()
 
 # --------------------------------------------------------------------------
 # Global Helpers
@@ -23,7 +24,17 @@ release_lock() {
   fi
 }
 
-trap release_lock EXIT INT TERM
+cleanup() {
+  release_lock
+  local f
+  # FIX(LOW): ${arr[@]+...} expands only when array is non-empty, avoiding a
+  # spurious "rm -f ''" iteration that ${arr[@]:-} produces on bash 3.2
+  for f in "${TEMP_FILES[@]+"${TEMP_FILES[@]}"}"; do
+    rm -f "$f" 2>/dev/null || true
+  done
+}
+
+trap cleanup EXIT INT TERM
 
 sed_i() {
   local expr="$1"
@@ -123,8 +134,8 @@ init_state() {
   local doc_path="${1:-docs/design-doc.md}"
   local plan_path="${2:-docs/plan.md}"
 
-  doc_path="${doc_path//\"/\\\"}"
-  plan_path="${plan_path//\"/\\\"}"
+  # FIX(HIGH): acquire lock before reading state to prevent TOCTOU race
+  acquire_lock || return 1
 
   if [[ -f "$STATE_FILE" ]] && ! $force; then
     local current_phase current_active
@@ -139,21 +150,70 @@ init_state() {
 
   mkdir -p "$PROJECT_ROOT/.gemini"
 
+  local started_at
+  started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
   local state_tmp
   state_tmp=$(mktemp "$PROJECT_ROOT/.gemini/.hail-init.XXXXXX")
-  cat > "$state_tmp" <<EOF
+  TEMP_FILES+=("$state_tmp")
+
+  if command -v python3 >/dev/null 2>&1; then
+    # FIX(LOW): pass paths via env vars to avoid heredoc expansion and single-quote injection
+    HAIL_STATE_FILE="$state_tmp" \
+    HAIL_DOC_PATH="$doc_path" \
+    HAIL_PLAN_PATH="$plan_path" \
+    HAIL_TIMESTAMP="$started_at" \
+    python3 - <<'PYEOF'
+import json, os
+d = {
+    "active": True,
+    "phase": 1,
+    "phase_name": "Discuss Phase",
+    "design_doc_path": os.environ['HAIL_DOC_PATH'],
+    "plan_path": os.environ['HAIL_PLAN_PATH'],
+    "doc_review_iterations": 0,
+    "plan_review_iterations": 0,
+    "started_at": os.environ['HAIL_TIMESTAMP'],
+    "last_updated": os.environ['HAIL_TIMESTAMP'],
+}
+with open(os.environ['HAIL_STATE_FILE'], 'w') as f:
+    json.dump(d, f, indent=2)
+PYEOF
+  elif command -v jq >/dev/null 2>&1; then
+    # FIX(LOW): use --arg so jq handles all JSON escaping for paths
+    jq -n \
+      --arg doc "$doc_path" \
+      --arg plan "$plan_path" \
+      --arg ts "$started_at" \
+      '{"active": true, "phase": 1, "phase_name": "Discuss Phase",
+        "design_doc_path": $doc, "plan_path": $plan,
+        "doc_review_iterations": 0, "plan_review_iterations": 0,
+        "started_at": $ts, "last_updated": $ts}' > "$state_tmp"
+  else
+    # FIX(LOW): sanitize \, $, ` before injecting into heredoc to prevent expansion
+    local doc_safe="${doc_path//\\/\\\\}"
+    doc_safe="${doc_safe//\$/\\\$}"
+    doc_safe="${doc_safe//\`/\\\`}"
+    doc_safe="${doc_safe//\"/\\\"}"
+    local plan_safe="${plan_path//\\/\\\\}"
+    plan_safe="${plan_safe//\$/\\\$}"
+    plan_safe="${plan_safe//\`/\\\`}"
+    plan_safe="${plan_safe//\"/\\\"}"
+    cat > "$state_tmp" <<EOF
 {
   "active": true,
   "phase": 1,
   "phase_name": "Discuss Phase",
-  "design_doc_path": "$doc_path",
-  "plan_path": "$plan_path",
+  "design_doc_path": "$doc_safe",
+  "plan_path": "$plan_safe",
   "doc_review_iterations": 0,
   "plan_review_iterations": 0,
-  "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "last_updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  "started_at": "$started_at",
+  "last_updated": "$started_at"
 }
 EOF
+  fi
+
   mv "$state_tmp" "$STATE_FILE"
   echo "✅ HAIL Loop initialized successfully!"
   show_status
@@ -162,9 +222,14 @@ EOF
 read_json_field() {
   local field="$1"
   if command -v jq >/dev/null 2>&1; then
-    jq -r ".$field // empty" "$STATE_FILE"
+    # FIX(HIGH): avoid // empty which treats boolean false as falsy and returns ""
+    # Use explicit null check so false → "false", true → "true", null → empty
+    jq -r ".$field | if . == null then empty else . end" "$STATE_FILE"
   elif command -v python3 >/dev/null 2>&1; then
-    python3 -c "import json; v=json.load(open('$STATE_FILE')).get('$field'); print('' if v is None else v)"
+    # FIX(HIGH+MEDIUM): pass STATE_FILE via env var; normalize bool with lower()
+    # so Python False → "false" not "False", matching grep fallback and jq output
+    HAIL_STATE_FILE="$STATE_FILE" python3 -c \
+      "import json,os; v=json.load(open(os.environ['HAIL_STATE_FILE'])).get('$field'); print('' if v is None else (str(v).lower() if isinstance(v, bool) else v))"
   else
     grep -o "\"$field\": *\"*[^\",]*\"*" "$STATE_FILE" | cut -d':' -f2 | tr -d ' ",'
   fi
@@ -207,6 +272,12 @@ show_status() {
   [[ $plan_iter -gt 0 ]] && echo "  Plan Review: iteration $plan_iter / $MAX_REVIEW_ITERATIONS"
   echo "-----------------------------------"
 
+  # FIX(LOW): show completed state instead of "Ready to Implement" after complete
+  if [[ "$active" == "false" ]]; then
+    echo "✅ Workflow complete. Run 'bash hail-loop.sh init' to start a new workflow."
+    return 0
+  fi
+
   case "$phase" in
     1) echo "👉 Next Step: Discuss direction and architecture with the human." ;;
     2) echo "👉 Next Step: Write design doc to '$doc'." ;;
@@ -246,23 +317,35 @@ write_phase() {
   timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   if command -v python3 >/dev/null 2>&1; then
-    python3 - <<PYEOF
+    # FIX(MEDIUM): pass all values via env vars + quoted <<'PYEOF' to prevent
+    # single-quote injection in STATE_FILE path and heredoc shell expansion
+    HAIL_STATE_FILE="$STATE_FILE" \
+    HAIL_NEW_PHASE="$new_phase" \
+    HAIL_NEW_NAME="$new_name" \
+    HAIL_TIMESTAMP="$timestamp" \
+    HAIL_INCREMENT_KEY="${increment_key:-}" \
+    python3 - <<'PYEOF'
 import json, os, tempfile
-with open('$STATE_FILE', 'r') as f:
+state_file = os.environ['HAIL_STATE_FILE']
+with open(state_file, 'r') as f:
     d = json.load(f)
-d['phase'] = $new_phase
-d['phase_name'] = '$new_name'
-d['last_updated'] = '$timestamp'
-$(if [[ -n "$increment_key" ]]; then echo "d['$increment_key'] = d.get('$increment_key', 0) + 1"; fi)
-dir_name = os.path.dirname('$STATE_FILE') or '.'
+d['phase'] = int(os.environ['HAIL_NEW_PHASE'])
+d['phase_name'] = os.environ['HAIL_NEW_NAME']
+d['last_updated'] = os.environ['HAIL_TIMESTAMP']
+inc_key = os.environ.get('HAIL_INCREMENT_KEY', '')
+if inc_key:
+    d[inc_key] = d.get(inc_key, 0) + 1
+dir_name = os.path.dirname(state_file) or '.'
 with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, suffix='.tmp') as tf:
     json.dump(d, tf, indent=2)
     tmp_path = tf.name
-os.replace(tmp_path, '$STATE_FILE')
+os.replace(tmp_path, state_file)
 PYEOF
   elif command -v jq >/dev/null 2>&1; then
     local tmp jq_expr
     tmp=$(mktemp "$PROJECT_ROOT/.gemini/.hail-state-tmp.XXXXXX")
+    # FIX(MEDIUM): register in TEMP_FILES so EXIT trap cleans up on jq failure
+    TEMP_FILES+=("$tmp")
     jq_expr=".phase = $new_phase | .phase_name = \"$new_name\" | .last_updated = \"$timestamp\""
     if [[ -n "$increment_key" ]]; then
       jq_expr="$jq_expr | .$increment_key = (.$increment_key // 0) + 1"
@@ -275,7 +358,8 @@ PYEOF
     sed_i "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/"
     if [[ -n "$increment_key" ]]; then
       local cur_val
-      cur_val=$(grep -o "\"$increment_key\": *[0-9]*" "$STATE_FILE" | grep -o '[0-9]*' || echo "0")
+      # FIX(LOW): use [0-9]+ (one-or-more) to avoid zero-length matches from GNU grep
+      cur_val=$(grep -o "\"$increment_key\": *[0-9]*" "$STATE_FILE" | grep -oE '[0-9]+' | head -1 || echo "0")
       cur_val="${cur_val:-0}"
       local new_val=$(( cur_val + 1 ))
       sed_i "s/\"$increment_key\": $cur_val/\"$increment_key\": $new_val/"
@@ -295,8 +379,15 @@ advance_phase() {
 
   acquire_lock || return 1
 
-  local current_phase
+  local current_phase active
   current_phase=$(read_json_field "phase")
+  active=$(read_json_field "active")
+
+  # FIX(LOW): guard against advancing a completed workflow
+  if [[ "$active" == "false" ]]; then
+    echo "❌ Workflow is already complete. Run 'bash hail-loop.sh init' to start a new one."
+    return 1
+  fi
 
   if [[ ! "$current_phase" =~ ^[0-9]+$ ]]; then
     echo "❌ Error: Could not read a valid phase from $STATE_FILE"
@@ -422,27 +513,37 @@ complete_workflow() {
   timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   if command -v python3 >/dev/null 2>&1; then
-    python3 - <<PYEOF
+    # FIX(MEDIUM): pass values via env vars + quoted <<'PYEOF' to prevent injection
+    HAIL_STATE_FILE="$STATE_FILE" \
+    HAIL_TIMESTAMP="$timestamp" \
+    python3 - <<'PYEOF'
 import json, os, tempfile
-with open('$STATE_FILE', 'r') as f:
+state_file = os.environ['HAIL_STATE_FILE']
+with open(state_file, 'r') as f:
     d = json.load(f)
 d['active'] = False
 d['phase'] = 9
 d['phase_name'] = 'Implement Phase'
-d['last_updated'] = '$timestamp'
-dir_name = os.path.dirname('$STATE_FILE') or '.'
+d['last_updated'] = os.environ['HAIL_TIMESTAMP']
+dir_name = os.path.dirname(state_file) or '.'
 with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, suffix='.tmp') as tf:
     json.dump(d, tf, indent=2)
     tmp_path = tf.name
-os.replace(tmp_path, '$STATE_FILE')
+os.replace(tmp_path, state_file)
 PYEOF
   elif command -v jq >/dev/null 2>&1; then
     local tmp
     tmp=$(mktemp "$PROJECT_ROOT/.gemini/.hail-state-tmp.XXXXXX")
+    # FIX(MEDIUM): register in TEMP_FILES so EXIT trap cleans up on jq failure
+    TEMP_FILES+=("$tmp")
     jq ".active = false | .phase = 9 | .phase_name = \"Implement Phase\" | .last_updated = \"$timestamp\"" "$STATE_FILE" > "$tmp"
     mv "$tmp" "$STATE_FILE"
   else
+    # FIX(MEDIUM): update all fields in the sed fallback, not just "active"
     sed_i "s/\"active\": true/\"active\": false/"
+    sed_i "s/\"phase\": [0-9]*/\"phase\": 9/"
+    sed_i "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"Implement Phase\"/"
+    sed_i "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/"
   fi
 
   echo "✅ HAIL workflow marked as complete. State preserved for reference."
@@ -451,8 +552,9 @@ PYEOF
 
 cancel_workflow() {
   if [[ -f "$STATE_FILE" ]]; then
+    # FIX(MEDIUM): acquire lock before deleting to prevent race with concurrent advance/revert
+    acquire_lock || return 1
     rm -f "$STATE_FILE"
-    release_lock
     echo "✅ HAIL Loop cancelled and state reset."
   else
     echo "❌ No active HAIL loop to cancel."

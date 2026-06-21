@@ -15,9 +15,25 @@ This skill defines the Human-Agent-in-the-Loop (HAIL) development workflow, ensu
 
 ## Version
 
-1.4.1
+1.5.1
 
 ## Change List
+
+- **v1.5.1 (2026-06-21)** — Fixed Opus Round 1 review findings (1 HIGH, 1 MEDIUM, 1 LOW)
+  - FIX(HIGH): `read_json_field` jq path changed from `.field // empty` to `.field | if . == null then empty else . end`; the `//` alternative operator treats `false` as falsy, returning `""` instead of `"false"` — silently breaking the `active=false` guards in `advance_phase` and `show_status`
+  - FIX(MEDIUM): `read_json_field` python3 path now uses `.lower()` on bool values so `False` → `"false"`, matching jq and grep output; previously the `init_state` re-init guard and `advance_phase`/`show_status` guards were all broken under python3
+  - FIX(LOW): `cleanup` uses `${TEMP_FILES[@]+"${TEMP_FILES[@]}"}` instead of `${TEMP_FILES[@]:-}` to skip iteration when array is empty, avoiding a spurious `rm -f ""` on bash 3.2
+
+- **v1.5.0 (2026-06-21)** — Fixed all adversarial review findings (1 HIGH, 4 MEDIUM, 4 LOW)
+  - FIX(HIGH): `init_state` now acquires lock before reading state to eliminate TOCTOU race condition
+  - FIX(MEDIUM): `cancel_workflow` now acquires lock before `rm -f` to prevent race with concurrent write
+  - FIX(MEDIUM): `complete_workflow` sed fallback now updates `phase`, `phase_name`, and `last_updated` (previously only updated `active`)
+  - FIX(MEDIUM): temp files in `write_phase` and `complete_workflow` (jq path) registered in `TEMP_FILES` array; global `cleanup()` replaces `release_lock` as EXIT/INT/TERM trap to guarantee cleanup on failure
+  - FIX(MEDIUM): Python heredocs in `write_phase`, `complete_workflow`, and `init_state` now use `<<'PYEOF'` + env vars to prevent single-quote injection via `$STATE_FILE` path and phase-name values
+  - FIX(LOW): `init_state` jq path uses `jq -n --arg` for correct JSON escaping of doc/plan paths; python3 path passes paths via env vars; sed fallback sanitizes `\`, `$`, `` ` `` before heredoc interpolation
+  - FIX(LOW): sed fallback `grep -o '[0-9]*'` changed to `grep -oE '[0-9]+'` to avoid zero-length matches on GNU grep
+  - FIX(LOW): `advance_phase` now guards against advancing a completed (`active=false`) workflow
+  - FIX(LOW): `show_status` now prints "✅ Workflow complete" instead of "🎉 Ready to Implement!" when `active=false`
 
 - **v1.4.1 (2026-06-21)** — Fixed lock safety and macOS compatibility bugs
   - Fix global exit trap lock deletion bug by introducing `LOCK_ACQUIRED` state flag
