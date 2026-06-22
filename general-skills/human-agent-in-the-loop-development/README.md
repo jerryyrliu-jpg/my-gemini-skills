@@ -1,13 +1,13 @@
 ---
 title: Human-Agent-in-the-Loop Development Skill
-date: 2026-06-21
+date: 2026-06-22
 tags: [hail, workflow, skill, development]
 status: stable
 ---
 
 # Human-Agent-in-the-Loop Development Skill
 
-#hail #workflow #skill #2026-06-21
+#hail #workflow #skill #2026-06-22
 
 ## Description
 
@@ -15,9 +15,20 @@ This skill defines the Human-Agent-in-the-Loop (HAIL) development workflow, ensu
 
 ## Version
 
-1.6.0
+1.7.0
 
 ## Change List
+
+- **v1.7.0 (2026-06-22)** — Major security hardening, bug fixes, and POSIX ERE/BRE compatibility update via dual adversarial AI code review (Gemini 3.1 Pro + Gemini 3.5 Flash)
+  - Support global skill execution by updating `HAIL_SCRIPT` discovery in `SKILL.md` to search both `~/.gemini/skills` and `$PROJECT_ROOT` (fixes setup failure when skill is installed globally)
+  - Synchronize branch-specific state file naming (`hail-state-<branch>.json`) and lock directory (`.hail-<branch>.lock`) across `README.md` and `SKILL.md` (fixes doc inconsistency)
+  - Prevent iteration cap counter reset on standard reverts (`revert 2` and `revert 6`) by using strict inequality (`-lt`) in `hail-loop.sh` (fixes infinite review loop vulnerability)
+  - Prevent TOCTOU lock recovery race condition in `acquire_lock` by introducing atomic rename staging (`.stale.$$`) and PID recording (fixes concurrent state corruption)
+  - Eliminate torn state reads during multi-step `sed -i` fallback operations by enforcing `acquire_lock` at the start of `show_status`
+  - Update `complete_workflow` POSIX BRE regex to `[0-9][0-9]*` for proper digit matching without `-E` flag
+  - Rewrite `read_json_field` grep/sed fallback pathway (`sed -n`) to prevent truncation of ISO-8601 timestamps and comma-delimited paths
+  - Guard `init_state` against overwriting in-progress Phase 9 implementation workflows without `--force` flag
+  - Double quote `$HOME` in script search command to prevent word splitting
 
 - **v1.6.0 (2026-06-21)** — Branch-specific state files, revert counter resetting, and embedded reviewer prompt rubric
   - Support branch isolation by appending current branch name to state JSON and lock directory (fixes state conflicts between parallel development branches)
@@ -92,8 +103,8 @@ human-agent-in-the-loop-development/
 └── scripts/
     └── hail-loop.sh       # Workflow loop controller and state manager
                            #   Commands: init, status, advance, revert, complete, cancel
-                           #   State: $PROJECT_ROOT/.gemini/hail-state.json (git-root anchored)
-                           #   Lock:  $PROJECT_ROOT/.gemini/.hail.lock (mkdir atomic)
+                           #   State: $PROJECT_ROOT/.gemini/hail-state-<branch>.json (git-root anchored)
+                           #   Lock:  $PROJECT_ROOT/.gemini/.hail-<branch>.lock (mkdir atomic)
 ```
 
 ## Architecture Block Diagram
@@ -105,7 +116,7 @@ graph LR
   subgraph Skill["HAIL Skill Components"]
     SKILL["SKILL.md\n(Agent Instructions)"]
     SCRIPT["hail-loop.sh\n(State Controller)"]
-    STATE[".gemini/hail-state.json\n(Workflow State)"]
+    STATE[".gemini/hail-state-<branch>.json\n(Workflow State)"]
   end
 
   subgraph Actors["Actors"]

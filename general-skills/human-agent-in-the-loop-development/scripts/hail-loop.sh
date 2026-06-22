@@ -119,8 +119,11 @@ acquire_lock() {
       if mtime=$(stat -c %Y "$LOCK_DIR" 2>/dev/null || stat -f %m "$LOCK_DIR" 2>/dev/null); then
         local lock_age=$(( $(date +%s) - mtime ))
         if [[ $lock_age -gt 30 ]]; then
-          echo "⚠️  Stale lock detected (${lock_age}s old). Removing automatically."
-          rmdir "$LOCK_DIR" 2>/dev/null || true
+          echo "⚠️  Stale lock detected (${lock_age}s old). Attempting atomic recovery."
+          local staging_dir="${LOCK_DIR}.stale.$$"
+          if mv "$LOCK_DIR" "$staging_dir" 2>/dev/null; then
+            rm -rf "$staging_dir" 2>/dev/null || true
+          fi
           continue
         fi
       fi
@@ -131,6 +134,7 @@ acquire_lock() {
     fi
     sleep 0.5
   done
+  echo $$ > "$LOCK_DIR/pid"
   LOCK_ACQUIRED=true
 }
 
@@ -155,7 +159,7 @@ init_state() {
     local current_phase current_active
     current_phase=$(read_json_field "phase" 2>/dev/null || echo "unknown")
     current_active=$(read_json_field "active" 2>/dev/null || echo "true")
-    if [[ "$current_active" != "false" && "$current_phase" != "9" ]]; then
+    if [[ "$current_active" != "false" ]]; then
       echo "❌ A HAIL loop is already active (Phase $current_phase)."
       echo "   Use '--force' to overwrite: bash hail-loop.sh init --force [DOC] [PLAN]"
       return 1
@@ -245,7 +249,7 @@ read_json_field() {
     HAIL_STATE_FILE="$STATE_FILE" python3 -c \
       "import json,os; v=json.load(open(os.environ['HAIL_STATE_FILE'], encoding='utf-8')).get('$field'); print('' if v is None else (str(v).lower() if isinstance(v, bool) else v))"
   else
-    grep -o "\"$field\": *\"*[^\",]*\"*" "$STATE_FILE" | cut -d':' -f2 | tr -d ' ",'
+    sed -n "s/.*\"$field\": *\"\([^\"]*\)\".*/\1/p; s/.*\"$field\": *\([a-z0-9]*\).*/\1/p" "$STATE_FILE" | head -1
   fi
 }
 
@@ -254,6 +258,8 @@ show_status() {
     echo "❌ HAIL loop is not initialized. Run 'bash hail-loop.sh init' to start."
     return 1
   fi
+
+  acquire_lock || return 1
 
   # Guard against empty or corrupted JSON
   if [[ ! -s "$STATE_FILE" ]]; then
@@ -532,8 +538,8 @@ revert_phase() {
   target_name=$(phase_name_for "$target_phase")
 
   # Reset iteration counts if reverting past the respective creation phases
-  [[ $target_phase -le 2 ]] && reset_keys="doc_review_iterations"
-  [[ $target_phase -le 6 ]] && reset_keys="${reset_keys:+$reset_keys }plan_review_iterations"
+  [[ $target_phase -lt 2 ]] && reset_keys="doc_review_iterations"
+  [[ $target_phase -lt 6 ]] && reset_keys="${reset_keys:+$reset_keys }plan_review_iterations"
 
   write_phase "$current_phase" "$target_phase" "$target_name" "" "$reset_keys"
   echo "⏪ Reverted from Phase $current_phase to Phase $target_phase ($target_name)"
@@ -580,7 +586,7 @@ PYEOF
   else
     # FIX(MEDIUM): update all fields in the sed fallback, not just "active"
     sed_i "s/\"active\": true/\"active\": false/"
-    sed_i "s/\"phase\": [0-9]*/\"phase\": 9/"
+    sed_i "s/\"phase\": [0-9][0-9]*/\"phase\": 9/"
     sed_i "s/\"phase_name\": \"[^\"]*\"/\"phase_name\": \"Implement Phase\"/"
     sed_i "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/"
   fi
