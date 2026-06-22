@@ -97,7 +97,7 @@ graph TD
 
 ### Human Checkpoint Note
 
-Phases 3, 5, and 8 are **human advisory checkpoints**. The `hail-loop.sh` script cannot enforce that a human has actually reviewed — it can only track phase state. The agent is expected to pause and present the artifact to the human before calling `advance` past these phases. The loop-back path after a Phase 4 review failure (`revert 2`) implies re-entering Phase 3 for human confirmation before returning to Phase 4 — this is the agent's responsibility to honor, not the script's.
+Phases 3, 5, and 8 are **human advisory checkpoints**. The `hail-loop.sh` script enforces a hard gate at these boundaries: calling `advance` without `--human-approved` will be blocked. The agent MUST pause, present the artifact to the human partner, and only advance upon explicit approval using `bash "$HAIL_SCRIPT" advance --human-approved`. The loop-back path after a Phase 4 review failure (`revert 2`) implies re-entering Phase 3 for human confirmation before returning to Phase 4.
 
 ## Subagent Review Loop Protocol
 
@@ -211,6 +211,8 @@ Use `$HAIL_SCRIPT` in all commands below. Anchoring to `PROJECT_ROOT` ensures th
 3. **Advance to the Next Phase** (after a step completes or a review passes):
    ```bash
    bash "$HAIL_SCRIPT" advance
+   # At Human Review Phases (3, 5, 8), you MUST pass --human-approved:
+   bash "$HAIL_SCRIPT" advance --human-approved
    ```
 
 4. **Revert to a Previous Phase** (after a review finds Medium/High issues):

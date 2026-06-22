@@ -33,7 +33,7 @@ TEMP_FILES=()
 
 release_lock() {
   if [[ "$LOCK_ACQUIRED" == "true" ]]; then
-    rmdir "$LOCK_DIR" 2>/dev/null || true
+    rm -rf "$LOCK_DIR" 2>/dev/null || true
     LOCK_ACQUIRED=false
   fi
 }
@@ -117,7 +117,7 @@ acquire_lock() {
     if [[ $retries -ge 2 && -d "$LOCK_DIR" ]]; then
       local mtime
       if mtime=$(stat -c %Y "$LOCK_DIR" 2>/dev/null || stat -f %m "$LOCK_DIR" 2>/dev/null); then
-        local lock_age=$(( $(date +%s) - mtime ))
+        local lock_age=$(( $(date +%s) - ${mtime:-0} ))
         if [[ $lock_age -gt 30 ]]; then
           echo "⚠️  Stale lock detected (${lock_age}s old). Attempting atomic recovery."
           local staging_dir="${LOCK_DIR}.stale.$$"
@@ -129,7 +129,7 @@ acquire_lock() {
       fi
     fi
     if [[ $retries -ge 20 ]]; then
-      echo "❌ Could not acquire state lock after 10s. Remove '$LOCK_DIR' if stale."
+      echo "❌ Could not acquire state lock after 10s. Remove directory '$LOCK_DIR' if stale (use: rmdir \"$LOCK_DIR\" or rm -rf \"$LOCK_DIR\")."
       return 1
     fi
     sleep 0.5
@@ -233,6 +233,7 @@ EOF
   fi
 
   mv "$state_tmp" "$STATE_FILE"
+  release_lock
   echo "✅ HAIL Loop initialized successfully!"
   show_status
 }
@@ -265,11 +266,13 @@ show_status() {
   if [[ ! -s "$STATE_FILE" ]]; then
     echo "❌ State file is empty: $STATE_FILE"
     echo "   Run 'bash hail-loop.sh init --force' to reset."
+    release_lock
     return 1
   fi
   if command -v jq >/dev/null 2>&1 && ! jq -e . "$STATE_FILE" >/dev/null 2>&1; then
     echo "❌ State file is corrupted: $STATE_FILE"
     echo "   Run 'bash hail-loop.sh init --force' to reset."
+    release_lock
     return 1
   fi
 
@@ -295,6 +298,7 @@ show_status() {
   # FIX(LOW): show completed state instead of "Ready to Implement" after complete
   if [[ "$active" == "false" ]]; then
     echo "✅ Workflow complete. Run 'bash hail-loop.sh init' to start a new workflow."
+    release_lock
     return 0
   fi
 
@@ -309,6 +313,7 @@ show_status() {
     8) echo "👉 Next Step: Request final human review on '$plan'." ;;
     9) echo "🎉 Ready to Implement! Proceed with TDD and coding." ;;
   esac
+  release_lock
 }
 
 phase_name_for() {
@@ -413,12 +418,13 @@ PYEOF
 # --------------------------------------------------------------------------
 
 advance_phase() {
+  acquire_lock || return 1
+
   if [[ ! -f "$STATE_FILE" ]]; then
     echo "❌ HAIL loop is not initialized."
+    release_lock
     return 1
   fi
-
-  acquire_lock || return 1
 
   local current_phase active
   current_phase=$(read_json_field "phase")
@@ -432,6 +438,15 @@ advance_phase() {
 
   if [[ ! "$current_phase" =~ ^[0-9]+$ ]]; then
     echo "❌ Error: Could not read a valid phase from $STATE_FILE"
+    return 1
+  fi
+
+  # Issue 3: Hard Human Checkpoint Gate
+  if [[ "$current_phase" =~ ^(3|5|8)$ ]] && [[ "${1:-}" != "--human-approved" ]]; then
+    echo "✋ HUMAN CHECKPOINT GATE (Phase $current_phase: $(phase_name_for "$current_phase"))."
+    echo "   Blocking silent auto-advancing past human review advisory boundaries."
+    echo "   Please present the artifact to your human partner. Once confirmed, advance with:"
+    echo "   bash hail-loop.sh advance --human-approved"
     return 1
   fi
 
@@ -463,6 +478,7 @@ advance_phase() {
     fi
   fi
 
+  release_lock
   show_status
 }
 
@@ -480,8 +496,11 @@ revert_phase() {
     return 1
   fi
 
+  acquire_lock || return 1
+
   if [[ ! -f "$STATE_FILE" ]]; then
     echo "❌ HAIL loop is not initialized."
+    release_lock
     return 1
   fi
 
@@ -542,17 +561,19 @@ revert_phase() {
   [[ $target_phase -lt 6 ]] && reset_keys="${reset_keys:+$reset_keys }plan_review_iterations"
 
   write_phase "$current_phase" "$target_phase" "$target_name" "" "$reset_keys"
+  release_lock
   echo "⏪ Reverted from Phase $current_phase to Phase $target_phase ($target_name)"
   show_status
 }
 
 complete_workflow() {
+  acquire_lock || return 1
+
   if [[ ! -f "$STATE_FILE" ]]; then
     echo "❌ No active HAIL loop to complete."
+    release_lock
     return 1
   fi
-
-  acquire_lock || return 1
 
   local timestamp
   timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -591,6 +612,7 @@ PYEOF
     sed_i "s/\"last_updated\": \"[^\"]*\"/\"last_updated\": \"$timestamp\"/"
   fi
 
+  release_lock
   echo "✅ HAIL workflow marked as complete. State preserved for reference."
   echo "   Run 'bash hail-loop.sh init' to start a new workflow."
 }
@@ -600,6 +622,7 @@ cancel_workflow() {
     # FIX(MEDIUM): acquire lock before deleting to prevent race with concurrent advance/revert
     acquire_lock || return 1
     rm -f "$STATE_FILE"
+    release_lock
     echo "✅ HAIL Loop cancelled and state reset."
   else
     echo "❌ No active HAIL loop to cancel."
@@ -621,7 +644,7 @@ shift
 case "$COMMAND" in
   init)     init_state "$@" ;;
   status)   show_status ;;
-  advance)  advance_phase ;;
+  advance)  advance_phase "$@" ;;
   revert)   revert_phase "$@" ;;
   complete) complete_workflow ;;
   cancel)   cancel_workflow ;;

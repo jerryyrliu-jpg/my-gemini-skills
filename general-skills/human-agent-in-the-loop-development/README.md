@@ -15,9 +15,18 @@ This skill defines the Human-Agent-in-the-Loop (HAIL) development workflow, ensu
 
 ## Version
 
-1.7.0
+1.8.0
 
 ## Change List
+
+- **v1.8.0 (2026-06-22)** — Ultimate complete-edition architecture hardening, TOCTOU elimination, and strict POSIX/macOS compatibility via dual adversarial AI code reviews
+  - Eliminate TOCTOU (Time-Of-Check to Time-Of-Use) race condition by moving `$STATE_FILE` existence check after `acquire_lock` across `advance_phase`, `revert_phase`, and `complete_workflow`
+  - Fix lingering lock directory issue in `release_lock` by upgrading cleanup command from `rmdir` to `rm -rf`
+  - Ensure JSON atomicity in `sed` fallback pathways by staging edits to temporary files before atomic `mv` replacement
+  - Enforce explicit `release_lock` invocations prior to all function `return` points in `show_status`
+  - Prevent potential shell syntax errors during lock age calculation by injecting `${mtime:-0}` default value
+  - Prioritize workspace-local `hail-loop.sh` script discovery over global installations in `SKILL.md`
+  - Clarify Phase 5 optional boundary interaction with `--human-approved` hard checkpoint gates
 
 - **v1.7.0 (2026-06-22)** — Major security hardening, bug fixes, and POSIX ERE/BRE compatibility update via dual adversarial AI code review (Gemini 3.1 Pro + Gemini 3.5 Flash)
   - Support global skill execution by updating `HAIL_SCRIPT` discovery in `SKILL.md` to search both `~/.gemini/skills` and `$PROJECT_ROOT` (fixes setup failure when skill is installed globally)
