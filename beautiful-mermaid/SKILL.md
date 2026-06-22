@@ -1,131 +1,111 @@
 ---
 name: beautiful-mermaid
-description: "Generate highly aesthetic Mermaid diagrams (Block, Sequence, Flowchart, C4 Context/Container/Component) optimized for Obsidian and high-end documentation."
+description: Create beautiful, highly aesthetic Mermaid diagrams (flowcharts, sequence, state, class, ER, XY charts, C4 architecture) with proper syntax, theming, and ASCII output. Use when generating or editing any Mermaid diagram. Do NOT trigger when the user request solely targets outputting standard Markdown tables, plain text directory trees, or non-Mermaid diagram engines (e.g., PlantUML, Graphviz DOT, D2, Excalidraw).
 ---
 
-# Skill: Beautiful Mermaid
-**Author:** Gemini CLI (Integrated)
-**Version:** 1.3.0
-**Description:** Generate highly aesthetic Mermaid diagrams optimized for Obsidian rendering and professional documentation.
+# Beautiful Mermaid Diagrams
+**Version:** 2.2.0 (Hybrid Fusion Masterpiece)
+**Description:** Generate highly aesthetic Mermaid diagrams optimized for Obsidian rendering, professional documentation, and programmatic generation.
 
-## 🎨 Core Design Aesthetics
-When generating Mermaid diagrams, follow these optimization rules to deliver a premium, professional-grade visual experience comparable to Figma or Excalidraw:
+## 🎨 Core Design Aesthetics (Zero-Dependency)
 
-1. **Global Initialization Directive (Mermaid Init Directive)**:
+When generating Markdown Mermaid diagrams, follow these rules to deliver a premium visual experience comparable to Figma or Excalidraw:
+
+1. **Global Initialization Directive (`%%{init}%%`)**:
    - Always include the `%%{init: { ... }}%%` block at the very top of your diagram to configure global fonts, lines, and base colors.
    - Recommended Fonts: `Inter`, `Outfit`, `PingFang TC`, `Segoe UI`, `system-ui`.
-   - To prevent flash of unstyled content and maintain theme adaptability (supporting both Dark and Light modes), prefer desaturated base themes or leave the `background` parameter adaptable (omit `background` for transparent rendering).
+   - To maintain theme adaptability in Dark and Light modes, omit `background` for transparent rendering. Always explicitly inject `"edgeLabelBackground": "transparent"` into `themeVariables` to prevent dark mode contrast glare.
 
-2. **Curated Color Palettes**:
-   - **Tokyo Night (Default / Recommended)**: Deep, cybernetic blue/purple tone.
-     - Primary Node: `#7aa2f7` (Blue) / Text `#ffffff`
-     - Database: `#9ece6a` (Green) / Text `#1a1b26`
-     - Decision/Condition: `#bb9af7` (Purple) / Text `#ffffff`
-     - Warning/Error: `#f7768e` (Red) / Text `#ffffff`
-     - Notes/Comments: `#e0af68` (Yellow) / Text `#1a1b26`
-     - Stroke/Border: `#24283b` or `#1f2335`
-   - **Catppuccin**: Soft, pastel tones.
-     - Lavender: `#b4befe`, Green: `#a6e3a1`, Mauve: `#cba6f7`, Red: `#f38ba8`, Peach: `#fab387`
-   - **Nord**: Minimalist, Nordic cold-grey tone.
-     - Frost Blue: `#88c0d0`, Green: `#a3be8c`, Purple: `#b48ead`, Red: `#bf616a`, Yellow: `#ebcb8b`
+2. **Curated Color Palettes (WCAG >= 4.5:1 Compliant)**:
+   - **Tokyo Night**: Deep cybernetic hierarchy.
+     - Primary Node: `#3d59a1` / Text `#ffffff`
+     - Database: `#2e7d32` / Text `#ffffff`
+     - Decision/Logic: `#7b1fa2` / Text `#ffffff`
+     - Warning/Error: `#c62828` / Text `#ffffff`
+     - Notes/Comments: `#f57c00` (Orange) / Text `#1f2335` (Dark blue-black, contrast 7.15:1)
+     - Stroke/Border: `#1f2335` (Thin 1px~2px rounded borders)
+   - **Catppuccin**: Soft pastel hierarchy. Lavender `#b4befe`, Mauve `#cba6f7`, Peach `#fab387`.
+   - **Nord**: Minimalist cold-grey hierarchy. Frost Blue `#88c0d0`, Green `#a3be8c`, Purple `#b48ead`.
 
-3. **Node Styles & Hierarchy (Shapes)**:
-   - Differentiate layers using distinct geometric shapes:
-     - Start / End / Entrance: Rounded rectangle `Node([Text])` or capsule.
-     - Process / Action: Standard rectangle `Node[Text]`.
-     - Decision / Logic: Diamond shape `Node{Text}`.
-     - Database / Storage: Cylindrical database shape `Node[(Text)]`.
-     - Subsystems / Containers: Structured `subgraph` blocks.
-   - Keep node borders thin (1px ~ 2px recommended) and use rounded corners.
+## 🛡️ Syntax Safety & Compatibility Iron Rules (Obsidian & CLI)
 
----
+To prevent Jison parser crashes and `Unsupported markdown` rendering failures:
+1. **Bidirectional Decoupling (No `<-->`)**: Never use `<-->`. Do not downgrade to undirected lines `---` (which destroys architecture semantics). Explicitly decompose into dual unidirectional edges: `A -->|req| B` and `B -->|resp| A`.
+2. **Official Subgraph Syntax**: Never write `subgraph "Title"` (Jison interprets quoted text as ID and crashes). Always enforce official syntax: `subgraph ID ["Label Text"]`.
+3. **Ordered List Trap (Obsidian Bug)**: Never start link or node labels with numbers followed by periods (e.g., `-->|1. Fetch|` or `Node["1. Fetch"]`), which triggers an HTML `<ol>` list parsing crash. If sequencing is mandatory, escape `1\. Fetch` or use full-width numerals.
+4. **Reserved Bracket Trap**: Never use square brackets inside link labels (e.g., `-->|[1] Fetch|`). Use alphanumeric text or modern quoted syntax: `A -- "[1] Fetch" --> B`.
+5. **Internal Quote Entity Rule**: Never use backslash escapes `\"` inside double-quoted node labels. Strictly replace quotes with HTML entities `&quot;` (e.g., `A["Payload: &quot;user_id&quot;"]`).
+6. **Asymmetric Flag Quote Prohibition**: Asymmetric flag nodes (`id>label]`) **strictly forbid double quotes** around their labels (e.g., write `E>Step 1]`, never `E>"Step 1"]`).
+7. **Obsidian Callout Indentation Rule**: When embedding Mermaid inside Obsidian Callouts (e.g., `> [!NOTE] Architecture`), **every single line** of the Mermaid block must be prefixed with `> `.
+8. **Entity Naming & Ampersands**: Node IDs must contain alphanumeric characters and underscores only (no hyphens `-` or dots `.`). Ampersands inside labels must be written as HTML entities `&amp;`.
 
-## 🚀 Advanced Layouts & Styling (mermaid-expert)
+## 🏢 C4 Architecture Diagrams (Flowchart-Simulated)
 
-### 1. Custom themeVariables
-Use custom `themeVariables` in the init block to override specific element details (e.g., actor boxes, loop boundaries, edge labels) to prevent default high-contrast jarring colors:
-```text
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "fontFamily": "Inter, system-ui, sans-serif",
-    "primaryColor": "#24283b",
-    "primaryTextColor": "#c0caf5",
-    "lineColor": "#565f89",
-    "edgeLabelBackground": "#1a1b26"
-  }
-}}%%
-```
+*Architecture Tradeoff Note*: Official native `C4Context` diagrams in Mermaid suffer from over-wide box models and rigid theming in Obsidian. For markdown documentation, use **Flowchart-Simulated C4** layouts.
 
-### 2. Styling Nodes with Class Definitions
-- Define reusable node classes via `classDef` at the top or bottom of the diagram.
-- Use explicit class syntax `NodeID:::ClassName` to apply styles.
-- **Tip**: To achieve styling equivalent to multiple class definitions, define composite classes (e.g., `classDef activeWarning fill:#f7768e,stroke:#db4b4b,stroke-width:2px,stroke-dasharray:5;`).
-
-### 3. Text Wrapping & Link Formatting
-- **Text Wrapping**: Mermaid does not auto-wrap text inside shapes by default. Use quotes and HTML break tags `<br/>` to format multi-line labels: `NodeID["**Title**<br/>Description line 1<br/>Description line 2"]`.
-- **Link Formatting**: Avoid raw characters that interfere with Mermaid parser syntax. For links, use standard markdown format inside nodes, or use Mermaid's built-in click/callback functionality if interactive.
-- **Label Escape**: Wrap label text in double quotes if it contains parentheses, brackets, or braces (e.g., `Node["System (Internal)"]`).
-
----
-
-## 🏢 C4 Architecture & Component Diagrams
-Design C4 Model Diagrams (System Context, Container, Component) natively in Mermaid using clean custom style variables and C4 structural conventions.
-
-### C4 Diagram Design Rules:
-1. **Color Conventions**:
-   - **Person / User**: Dark Blue (`#08427b`)
-   - **Internal System / Container / Component**: Medium Blue (`#1168bd`)
-   - **External System / Person**: Grey (`#999999`)
-   - **Database**: Blue Cylindrical Node with DB label formatting.
-2. **Clear Boundaries**:
-   - Use `subgraph` for System Boundaries, Enterprise Boundaries, and Container Boundaries.
-   - Style boundaries with dashed borders (`stroke-dasharray: 5 5`) and transparent backgrounds to distinguish them clearly from system components.
-3. **Relationships**:
-   - Always label relationship links clearly with the action and technology protocol.
-   - Format: `Source -->|Action Description (Protocol)| Target` or `Source -- "Action Description (Protocol)" --> Target`.
-
-### Native C4 Context & Container Template:
 ```mermaid
 %%{init: {
   "theme": "base",
   "themeVariables": {
     "fontFamily": "Inter, system-ui, sans-serif",
-    "background": "#f8f9fa",
     "lineColor": "#707070",
-    "edgeLabelBackground": "#ffffff"
+    "edgeLabelBackground": "transparent"
   }
 }}%%
-graph TB
-  %% Class Definitions
+flowchart TB
   classDef c4Person fill:#08427b,stroke:#073b6e,stroke-width:1px,color:#ffffff;
   classDef c4Internal fill:#1168bd,stroke:#0f5ca6,stroke-width:1px,color:#ffffff;
-  classDef c4External fill:#999999,stroke:#888888,stroke-width:1px,color:#ffffff;
-  classDef c4Boundary fill:none,stroke:#cccccc,stroke-width:2px,stroke-dasharray:5 5,color:#333333;
+  classDef c4External fill:#616161,stroke:#424242,stroke-width:1px,color:#ffffff;
 
-  %% Person Node
   User(["User<br/>'[Person]'"]):::c4Person
-
-  %% System Boundary
-  subgraph System_Boundary ["System Boundary: E-Commerce Platform"]
-    Web_App["Web Application<br/>'[Container: React]'<br/><br/>Allows users to browse catalog and purchase items."]:::c4Internal
-    API_Gateway["API Gateway<br/>'[Container: NestJS]'<br/><br/>Routes traffic and handles authentication."]:::c4Internal
-    DB[("Database<br/>'[Container: PostgreSQL]'<br/><br/>Stores catalog, order data, and user accounts.")]:::c4Internal
+  subgraph sys_boundary ["System Boundary: E-Commerce Platform"]
+    WebApp["Web Application<br/>'[Container: React]'"]:::c4Internal
+    DB[("Database<br/>'[Container: PostgreSQL]'")]:::c4Internal
   end
-  style System_Boundary fill:none,stroke:#999999,stroke-width:2px,stroke-dasharray:5 5;
+  style sys_boundary fill:none,stroke:#999999,stroke-width:2px,stroke-dasharray:5;
 
-  %% External System
-  Payment_Gateway["Payment Gateway<br/>'[System: Stripe]'<br/><br/>Processes credit card transactions."]:::c4External
-
-  %% Relationships
-  User -->|Browses catalog & orders (HTTPS)| Web_App
-  Web_App -->|API Requests (HTTPS/JSON)| API_Gateway
-  API_Gateway -->|Queries & updates (SQL)| DB
-  API_Gateway -->|Sends transactions (HTTPS/REST)| Payment_Gateway
+  User -->|Browses catalog &amp; orders (HTTPS)| WebApp
+  WebApp -->|Queries &amp; updates (SQL)| DB
 ```
 
----
+## 📐 Supported Diagram Cheatsheet
 
-## 💡 Obsidian Optimization Tips
-1. **Theme Adaptability**: When defining custom colors, prioritize color schemes that remain legible and comfortable to look at in both light and dark themes (such as desaturated Tokyo Night tones). If you want background to adapt to light mode automatically, recommend omitting the `"background"` parameter.
-2. **Syntax Compatibility**: Avoid raw HTML tags or unescaped special characters inside node labels to prevent rendering parsing issues in Obsidian. If labels contain parentheses or brackets, wrap the label text in double quotes (e.g., `Node["Label (Info)"]`).
+### 1. Flowcharts
+Node shapes (always include instance ID): `A[text]` rectangle, `B{text}` diamond, `C([text])` stadium, `D((text))` circle, `E>text]` asymmetric flag (no quotes allowed), `F[[text]]` subroutine.
+
+### 2. ER Diagrams (`erDiagram`)
+Syntax: `EntityA <LeftCardinality><Line><RightCardinality> EntityB : "Role Label"`
+- *Directional Symmetry Rule*: Left connectors (`|o`, `}o`, `}|`, `||`) must mirror horizontally when used on right connectors (`o|`, `o{`, `|{`, `||`).
+- Lines: `--` identifying (solid), `..` non-identifying (dashed).
+- Cardinalities: `||` exactly one, `o|` / `|o` zero or one, `}|` / `|{` one or more, `}o` / `o{` zero or more.
+- Example: `CUSTOMER ||--o{ ORDER : "places"`
+
+### 3. XY Charts (`xychart-beta`)
+Orientation declaration at block header (vertical is default and can be omitted): `xychart-beta` or `xychart-beta horizontal`
+Supports `title "..."`, `x-axis [...]`, `y-axis "..." min --> max`, `bar [...]`, `line [...]`.
+
+### 4. Sequence & Class Diagrams
+Sequence: `->>` solid arrowhead, `-->>` dotted arrowhead. Class: `<|--` inheritance, `*--` composition, `o--` aggregation.
+
+## 💻 Programmatic & ASCII Generation (`beautiful-mermaid` library)
+
+When writing server-side Node.js/Bun scripts or CLI tools:
+```typescript
+import { renderMermaidSVG, renderMermaidASCII, THEMES } from 'beautiful-mermaid'
+
+// SVG Rendering
+const svg = renderMermaidSVG(diagram, THEMES['tokyo-night']) // or { bg: '#1a1b26', fg: '#a9b1d6' }
+
+// ASCII Terminal Rendering (Default mode outputs crisp Unicode box-drawing art ┌───┐)
+const unicodeArt = renderMermaidASCII(`graph LR; A --> B --> C`)
+
+// Legacy ASCII Mode (Outputs pure 7-bit ASCII +---+ only for restricted environments)
+const legacyAscii = renderMermaidASCII(`graph LR; A --> B --> C`, { useAscii: true })
+```
+Built-in library themes (15): `zinc-light`, `zinc-dark`, `tokyo-night`, `tokyo-night-storm`, `tokyo-night-light`, `catppuccin-mocha`, `catppuccin-latte`, `nord`, `nord-light`, `dracula`, `github-light`, `github-dark`, `solarized-light`, `solarized-dark`, `one-dark`.
+
+## References
+- [Mermaid.js Documentation](https://mermaid.js.org/)
+- [beautiful-mermaid GitHub](https://github.com/lukilabs/beautiful-mermaid)
+
+#2026-06-22

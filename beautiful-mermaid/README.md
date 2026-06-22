@@ -10,12 +10,16 @@ Generate highly aesthetic Mermaid diagrams (Block, Sequence, Flowchart, C4 Conte
 ---
 
 ## 📌 Version Information
-- **Current Version**: v1.3.0
-- **Updated Date**: 2026-06-21
+- **Current Version**: v2.2.0
+- **Updated Date**: 2026-06-22
 
 ---
 
 ## 🕒 Change List
+- **[2026-06-22] v2.2.0**:
+  - Perfected hybrid fusion (v2.2.0 Masterpiece): Combined zero-dependency aesthetics with absolute Obsidian rendering safety iron rules.
+  - Resolved C4 Flowchart simulation ER diagram directional symmetry, AST Jison parser bracket/quote entity rules, and WCAG >= 4.5:1 dark mode contrast compliance.
+  - Added programmatic Node.js/Bun TS library generation guide and decoupled negative prompt routing boundaries.
 - **[2026-06-21] v1.3.0**:
   - Integrated `mermaid-expert` capabilities (custom `themeVariables`, multi-class definitions, advanced layout control, text wrapping `<br/>`, and link formatting).
   - Integrated `c4-architecture` and `c4-component` styles and layouts purely in native Mermaid (Context/Container diagrams, system/container boundaries, databases, external systems, and relationship descriptions with protocol details).
