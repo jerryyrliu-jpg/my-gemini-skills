@@ -15,9 +15,12 @@ This skill defines the Human-Agent-in-the-Loop (HAIL) development workflow, ensu
 
 ## Version
 
-1.8.0
+1.8.1
 
 ## Change List
+
+- **v1.8.1 (2026-06-27)** — Fix project root auto-detection for non-git workspaces
+  - Exclude user's `$HOME` directory from matching `.gemini` folder to prevent state pollution and conflicts in non-git workspace repositories.
 
 - **v1.8.0 (2026-06-22)** — Ultimate complete-edition architecture hardening, TOCTOU elimination, and strict POSIX/macOS compatibility via dual adversarial AI code reviews
   - Eliminate TOCTOU (Time-Of-Check to Time-Of-Use) race condition by moving `$STATE_FILE` existence check after `acquire_lock` across `advance_phase`, `revert_phase`, and `complete_workflow`
