@@ -9,7 +9,11 @@ find_project_root() {
   local dir
   dir="$(pwd)"
   while [[ "$dir" != "/" ]]; do
-    if [[ -d "$dir/.git" || -d "$dir/.gemini" ]]; then
+    if [[ -d "$dir/.git" ]]; then
+      echo "$dir"
+      return 0
+    fi
+    if [[ -d "$dir/.gemini" && "$dir" != "$HOME" ]]; then
       echo "$dir"
       return 0
     fi
